@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
 # extract stay points from a GPS log file
@@ -72,18 +72,18 @@ def stayPointExtraction(file, distThres = 200, timeThres = 30*60):
     return stayPointList
     
 if __name__ == '__main__':
-  for dirname, dirnames, filenames in os.walk('Data'):
-		filenum = len(filenames)
-		for filename in filenames:
-			if filename.endswith('plt'):
-				gpsfile = os.path.join(dirname, filename)
-				spt = stayPointExtraction(gpsfile)
-				if len(spt) > 0:
-					spfile = gpsfile.replace('Data', 'StayPoint')
-					if not os.path.exists(os.path.dirname(spfile)):
-						os.makedirs(os.path.dirname(spfile))
-					spfile_handle = open(spfile, 'w+')
-					print >> spfile_handle, 'Extracted stay points:\nlongitude\tlaltitude\tarriving time\tleaving time'
-					for sp in spt:
-						print >> spfile_handle, sp.laltitude, sp.longitude, time.strftime(time_format,time.localtime(sp.arrivTime)), time.strftime(time_format, time.localtime(sp.leaveTime))
-					spfile_handle.close()
+    for dirname, dirnames, filenames in os.walk('Data'):
+        filenum = len(filenames)
+        for filename in filenames:
+            if filename.endswith('plt'):
+                gpsfile = os.path.join(dirname, filename)
+                spt = stayPointExtraction(gpsfile)
+                if len(spt) > 0:
+                    spfile = gpsfile.replace('Data', 'StayPoint')
+                    if not os.path.exists(os.path.dirname(spfile)):
+                        os.makedirs(os.path.dirname(spfile))
+                    spfile_handle = open(spfile, 'w+')
+                    print >> spfile_handle, 'Extracted stay points:\nlongitude\tlaltitude\tarriving time\tleaving time'
+                    for sp in spt:
+                        print >> spfile_handle, sp.laltitude, sp.longitude, time.strftime(time_format,time.localtime(sp.arrivTime)), time.strftime(time_format, time.localtime(sp.leaveTime))
+                    spfile_handle.close()
