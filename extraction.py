@@ -73,7 +73,6 @@ def stayPointExtraction(file, distThres = 200, timeThres = 30*60):
     
 if __name__ == '__main__':
     for dirname, dirnames, filenames in os.walk('Data'):
-        filenum = len(filenames)
         for filename in filenames:
             if filename.endswith('plt'):
                 gpsfile = os.path.join(dirname, filename)
