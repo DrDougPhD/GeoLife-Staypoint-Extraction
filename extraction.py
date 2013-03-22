@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # extract stay points from a GPS log file
@@ -7,6 +7,7 @@
 
 import time
 import os
+import sys
 from ctypes import *
 from math import radians, cos, sin, asin, sqrt
 
@@ -24,11 +25,12 @@ class stayPoint(Structure):
 # calculate distance between two points from their coordinate
 def getDistance(lon1, lat1, lon2, lat2):
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    
     dlon = lon2 - lon1 
     dlat = lat2 - lat1 
     a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
     c = 2 * asin(sqrt(a)) 
-    m = 6367000 * c
+    m = 6371000 * c
     return m
     
 def computMeanCoord(gpsPoints):
@@ -40,20 +42,27 @@ def computMeanCoord(gpsPoints):
         lat += float(fields[1])
     return (lon/len(gpsPoints), lat/len(gpsPoints))
 
+# extract stay points from a GPS log file
+# input:
+#        file: the name of a GPS log file
+#        distThres: distance threshold
+#        timeThres: time span threshold
 # default values of distThres and timeThres are 200 m and 30 min respectively, according to [1]
-def stayPointExtraction(file, distThres = 200, timeThres = 30*60):
+
+def stayPointExtraction(file, distThres = 200, timeThres = 20*60):
     stayPointList = []
     log = open(file, 'r')
     points = log.readlines()[6:] # first 6 lines are useless
     pointNum = len(points)
     i = 0
-    while i < pointNum-1: # Algorithm in [1] is wrong here
+    while i < pointNum-1: 
         j = i+1
         while j < pointNum:
             field_pointi = points[i].rstrip().split(',')
             field_pointj = points[j].rstrip().split(',')
             dist = getDistance(float(field_pointi[0]),float(field_pointi[1]),
                                float(field_pointj[0]),float(field_pointj[1]))
+            
             if dist > distThres:
                 t_i = time.mktime(time.strptime(field_pointi[-2]+','+field_pointi[-1],time_format))
                 t_j = time.mktime(time.strptime(field_pointj[-2]+','+field_pointj[-1],time_format))
@@ -65,24 +74,25 @@ def stayPointExtraction(file, distThres = 200, timeThres = 30*60):
                     stayPointList.append(sp)
                 i = j
                 break
-            # Algorithm in [1] lacks following two lines
-            if i != j:
-                i += 1
             j += 1
+        # Algorithm in [1] lacks following line
+        i += 1
     return stayPointList
     
 if __name__ == '__main__':
     for dirname, dirnames, filenames in os.walk('Data'):
+        filenum = len(filenames)
         for filename in filenames:
-            if filename.endswith('plt'):
+            if  filename.endswith('plt'):
                 gpsfile = os.path.join(dirname, filename)
-                spt = stayPointExtraction(gpsfile)
+                spt = stayPointExtraction(gpsfile) 
                 if len(spt) > 0:
                     spfile = gpsfile.replace('Data', 'StayPoint')
                     if not os.path.exists(os.path.dirname(spfile)):
                         os.makedirs(os.path.dirname(spfile))
+                    
                     spfile_handle = open(spfile, 'w+')
                     print >> spfile_handle, 'Extracted stay points:\nlongitude\tlaltitude\tarriving time\tleaving time'
                     for sp in spt:
-                        print >> spfile_handle, sp.laltitude, sp.longitude, time.strftime(time_format,time.localtime(sp.arrivTime)), time.strftime(time_format, time.localtime(sp.leaveTime))
-                    spfile_handle.close()
+                        print >> spfile_handle, sp.laltitude, sp.longitude, time.strftime(time_format, time.localtime(sp.arrivTime)), time.strftime(time_format, time.localtime(sp.leaveTime))
+    spfile_handle.close()
