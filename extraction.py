@@ -1,23 +1,37 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# extract stay points from a GPS log file
-# implementation of algorithm in 
-# [1] Q. Li, Y. Zheng, X. Xie, Y. Chen, W. Liu, and W.-Y. Ma, "Mining user similarity based on location history", in Proceedings of the 16th ACM SIGSPATIAL international conference on Advances in geographic information systems, New York, NY, USA, 2008, pp. 34:1--34:10.
+# Extract stay points from a GPS log file, specifically the GeoLife GPS
+# trajectory dataset. Available for download here:
+#   https://www.microsoft.com/en-us/download/details.aspx?id=52367
+#
+# Implementation of the staypoint extraction algorithm in
+# [1] Q. Li, Y. Zheng, X. Xie, Y. Chen, W. Liu, and W.-Y. Ma,
+#       "Mining user similarity based on location history", in the Proceedings
+#       of the 16th ACM SIGSPATIAL International Conference on Advances in
+#       Geographic Information Systems, New York, NY, USA, 2008,
+#       pp. 34:1--34:10.
+#       https://doi.org/10.1145/1463434.1463477
+
+# Forked from code written by RustingSword on GitHub
+# https://gist.github.com/RustingSword/5215046
 
 import time
 import os
 import sys
 from ctypes import *
-from math import radians, cos, sin, asin, sqrt
+from math import radians
+from math import cos
+from math import sin
+from math import asin
+from math import sqrt
 
 time_format = '%Y-%m-%d,%H:%M:%S'
 
-# structure of stay point
-class stayPoint(Structure):
+class StayPoint(Structure):
     _fields_ = [
         ("longitude", c_double),
-        ("laltitude", c_double),
+        ("latitude", c_double),
         ("arrivTime", c_uint64),
         ("leaveTime", c_uint64)
     ]
@@ -42,12 +56,13 @@ def computMeanCoord(gpsPoints):
         lat += float(fields[1])
     return (lon/len(gpsPoints), lat/len(gpsPoints))
 
-# extract stay points from a GPS log file
-# input:
+# Extract stay points from a GPS log file
+# Input:
 #        file: the name of a GPS log file
 #        distThres: distance threshold
 #        timeThres: time span threshold
-# default values of distThres and timeThres are 200 m and 30 min respectively, according to [1]
+# Default values of distThres and timeThres are 200 m and 30 min respectively,
+#  according to [1]
 
 def stayPointExtraction(file, distThres = 200, timeThres = 20*60):
     stayPointList = []
@@ -68,8 +83,8 @@ def stayPointExtraction(file, distThres = 200, timeThres = 20*60):
                 t_j = time.mktime(time.strptime(field_pointj[-2]+','+field_pointj[-1],time_format))
                 deltaT = t_j - t_i
                 if deltaT > timeThres:
-                    sp = stayPoint()
-                    sp.laltitude, sp.longitude = computMeanCoord(points[i:j+1])
+                    sp = StayPoint()
+                    sp.latitude, sp.longitude = computMeanCoord(points[i:j+1])
                     sp.arrivTime, sp.leaveTime = int(t_i), int(t_j)
                     stayPointList.append(sp)
                 i = j
@@ -78,21 +93,58 @@ def stayPointExtraction(file, distThres = 200, timeThres = 20*60):
         # Algorithm in [1] lacks following line
         i += 1
     return stayPointList
-    
+
+
+DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
+    os.path.expanduser('~'),
+    'Desktop',
+    'Research',
+    'Geolife Trajectories 1.3'
+)
 if __name__ == '__main__':
-    for dirname, dirnames, filenames in os.walk('Data'):
+    if len(sys.argv) < 2:
+        print('Usage: python3 {} PATH'.format(sys.argv[0]))
+        print('Continuing with PATH set to "{}"'.format(
+            DEFAULT_GEOLIFE_DIRECTORY
+        ))
+        geolife_directory = DEFAULT_GEOLIFE_DIRECTORY
+
+    else:
+        geolife_directory = os.path.abspath(sys.argv[-1])
+
+    assert os.path.isdir(geolife_directory), (
+        'No directory located at {}. Aborting.'.format(geolife_directory)
+    )
+
+    for dirname, dirnames, filenames in os.walk(geolife_directory):
         filenum = len(filenames)
         for filename in filenames:
-            if  filename.endswith('plt'):
+            if filename.endswith('plt'):
                 gpsfile = os.path.join(dirname, filename)
                 spt = stayPointExtraction(gpsfile) 
                 if len(spt) > 0:
                     spfile = gpsfile.replace('Data', 'StayPoint')
-                    if not os.path.exists(os.path.dirname(spfile)):
-                        os.makedirs(os.path.dirname(spfile))
+                    os.makedirs(os.path.dirname(spfile), exist_ok=True)
                     
                     spfile_handle = open(spfile, 'w+')
-                    print >> spfile_handle, 'Extracted stay points:\nlongitude\tlaltitude\tarriving time\tleaving time'
+                    print(('Extracted stay points:\n'
+                          'longitude\t'
+                          'laltitude\t'
+                          'arriving time\t'
+                          'leaving time'),
+                          file=spfile_handle)
                     for sp in spt:
-                        print >> spfile_handle, sp.laltitude, sp.longitude, time.strftime(time_format, time.localtime(sp.arrivTime)), time.strftime(time_format, time.localtime(sp.leaveTime))
-    spfile_handle.close()
+                        print('\t'.join(map(
+                            lambda v: str(v),
+                            [
+                                sp.latitude, sp.longitude,
+                                time.strftime(time_format,
+                                               time.localtime(sp.arrivTime)),
+                                time.strftime(time_format,
+                                               time.localtime(sp.leaveTime))
+                            ]
+                            )),
+                            file=spfile_handle
+                        )
+
+                    spfile_handle.close()
