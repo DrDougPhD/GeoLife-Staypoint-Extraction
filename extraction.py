@@ -42,6 +42,8 @@ LICENSE
 # Forked from code written by RustingSword on GitHub
 # https://gist.github.com/RustingSword/5215046
 
+import dateutil.parser
+
 __appname__ = "plt2staypoints"
 __author__ = "Doug McGeehan"
 __version__ = "0.0pre0"
@@ -67,6 +69,8 @@ from math import cos
 from math import sin
 from math import asin
 from math import sqrt
+#from scipy.spatial import distance
+#from geopy.distance import vincenty
 
 
 DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
@@ -75,7 +79,6 @@ DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
     'Research',
     'Geolife Trajectories 1.3'
 )
-TIME_FORMAT = '%Y-%m-%d,%H:%M:%S'
 
 
 def main(args):
@@ -113,10 +116,8 @@ def main(args):
                         lambda v: str(v),
                         [
                             sp.latitude, sp.longitude,
-                            time.strftime(TIME_FORMAT,
-                                          time.localtime(sp.arrivTime)),
-                            time.strftime(TIME_FORMAT,
-                                          time.localtime(sp.leaveTime))
+                            str(time.localtime(sp.arrivTime)),
+                            str(time.localtime(sp.leaveTime))
                         ]
                     )),
                         file=spfile_handle
@@ -159,8 +160,8 @@ def computMeanCoord(gpsPoints):
     lon = 0.0
     lat = 0.0
     for point in gpsPoints:
-        lon += float(point[0])
-        lat += float(point[1])
+        lon += float(point[0][0])
+        lat += float(point[0][1])
     return (lon / len(gpsPoints), lat / len(gpsPoints))
 
 
@@ -176,36 +177,42 @@ class StayPointExtractor(object):
     def __init__(self, path, distance_threshold=200, time_threshold=20*60):
         staypoints = []
         with open(path) as gps_log:
-            valid_lines = filter(lambda x: x[0] >= 6,
-                                 enumerate(gps_log))
-            points = list(map(lambda line: line[1].rstrip().split(','),
-                              valid_lines))
+            # Map raw lines in the GPS log into a tuple of lat, long,
+            # and timestamp.
+            # e.g.
+            # '39.89,116.45,0,157,39925.448611,2009-04-22,10:46:00\n'
+            #       is mapped to
+            # [(39.89, 116.45), datetime.datetime(2009, 4, 22, 10, 46)]
+            points = self.point_extractor(gps_log)
+            point_count = len(points)
 
-            pointNum = len(points)
             i = 0
-            while i < pointNum - 1:
+            while i < point_count - 1:
+                point_i = points[i]
+            # for i, point_i in enumerate(points):
+            #     if i == point_count - 1:
+            #         break
+            #
+            #     for j, point_j in enumerate(points[i+1:]):
+                    # distance = vincenty(point_i, point_j).meters
                 j = i + 1
-                while j < pointNum:
-                    field_pointi = points[i]
-                    field_pointj = points[j]
-                    dist = getDistance(float(field_pointi[0]),
-                                       float(field_pointi[1]),
-                                       float(field_pointj[0]),
-                                       float(field_pointj[1]))
+                while j < point_count:
+                    point_j = points[j]
+                    dist = getDistance(*point_i[0],
+                                       *point_j[0])
 
                     if dist > distance_threshold:
-                        t_i = time.mktime(
-                            time.strptime(field_pointi[-2] + ',' + field_pointi[-1],
-                                          TIME_FORMAT))
-                        t_j = time.mktime(
-                            time.strptime(field_pointj[-2] + ',' + field_pointj[-1],
-                                          TIME_FORMAT))
-                        deltaT = t_j - t_i
+                        deltaT = (point_j[1] - point_i[1]).total_seconds()
                         if deltaT > time_threshold:
                             sp = StayPoint()
                             sp.latitude, sp.longitude = computMeanCoord(
                                 points[i:j + 1])
-                            sp.arrivTime, sp.leaveTime = int(t_i), int(t_j)
+                            sp.arrivTime = int(
+                                time.mktime(point_i[1].timetuple())
+                            )
+                            sp.leaveTime = int(
+                                time.mktime(point_j[1].timetuple())
+                            )
                             staypoints.append(sp)
                         i = j
                         break
@@ -213,6 +220,38 @@ class StayPointExtractor(object):
                 # Algorithm in [1] lacks following line
                 i += 1
         self.staypoints = staypoints
+
+    def point_extractor(self, gps_log):
+        # Ignore the first six lines of each file
+        valid_lines = filter(lambda x: x[0] >= 6,
+                             enumerate(gps_log))
+        # Split the lines into seperate fields
+        # '39.890275,116.453691,0,157,39925.4486111111,2009-04-22,10:46:00'
+        #       mapped to
+        # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
+        #  '2009-04-22', '10:46:00']
+        raw_points = map(lambda line: line[1].rstrip().split(','),
+                         valid_lines)
+        # Extract only the lat, long, date, and time fields, merging the
+        #   date and time fields, and convert to the appropriate data types
+        # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
+        #  '2009-04-22', '10:46:00']
+        #       mapped to
+        # [(39.890275, 116.453691), datetime.datetime(2009, 4, 22, 10, 46)]
+        LATITUDE_INDEX = 0
+        LONGITUDE_INDEX = 1
+        DATE_INDEX = -2
+        TIME_INDEX = -1
+        points = map(
+            lambda raw_point: (
+                (float(raw_point[LATITUDE_INDEX]),
+                 float(raw_point[LONGITUDE_INDEX])),
+                dateutil.parser.parse(' '.join([raw_point[DATE_INDEX],
+                                                raw_point[TIME_INDEX]]))
+            ),
+            raw_points
+        )
+        return list(points)
 
     def __iter__(self):
         for staypoint in self.staypoints:
