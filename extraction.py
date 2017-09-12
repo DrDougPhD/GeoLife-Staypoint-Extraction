@@ -80,10 +80,14 @@ def stayPointExtraction(file, distThres = 200, timeThres = 20*60):
     return stayPointList
     
 if __name__ == '__main__':
-    for dirname, dirnames, filenames in os.walk('Data'):
+    for dirname, dirnames, filenames in os.walk(os.path.join(
+            os.path.expanduser('~'),
+            'Desktop', 'Research', 'Geolife Trajectories 1.3', 'Data')):
         filenum = len(filenames)
+        print('{} files in {}'.format(filenum, dirname))
         for filename in filenames:
             if  filename.endswith('plt'):
+                print(filename)
                 gpsfile = os.path.join(dirname, filename)
                 spt = stayPointExtraction(gpsfile) 
                 if len(spt) > 0:
@@ -92,7 +96,20 @@ if __name__ == '__main__':
                         os.makedirs(os.path.dirname(spfile))
                     
                     spfile_handle = open(spfile, 'w+')
-                    print >> spfile_handle, 'Extracted stay points:\nlongitude\tlaltitude\tarriving time\tleaving time'
+                    print('Extracted stay points:\n'
+                          'longitude\t'
+                          'laltitude\t'
+                          'arriving time\t'
+                          'leaving time',
+                          file=spfile_handle)
                     for sp in spt:
-                        print >> spfile_handle, sp.laltitude, sp.longitude, time.strftime(time_format, time.localtime(sp.arrivTime)), time.strftime(time_format, time.localtime(sp.leaveTime))
-    spfile_handle.close()
+                        print(','.join([
+                            sp.laltitude, sp.longitude,
+                            time.strftime(time_format,
+                                          time.localtime(sp.arrivTime)),
+                            time.strftime(time_format,
+                                          time.localtime(sp.leaveTime))
+                            ]),
+                            file=spfile_handle
+                        )
+                    spfile_handle.close()
