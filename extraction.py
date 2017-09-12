@@ -82,6 +82,7 @@ def main(args):
     plt_files = []
     for directory, subdirectories, filenames in os.walk(args.input_directory):
         if 'StayPoint' in directory:
+            # Skip any files within the previously created StayPoint directory
             continue
 
         plt_files_within_directory = filter(lambda p: p.endswith('plt'),
@@ -96,7 +97,7 @@ def main(args):
             logger.info(plt_file)
 
             staypoints = StayPointExtractor(plt_file)
-            if len(staypoints) > 0:
+            if staypoints:
                 spfile = plt_file.replace('Data', 'StayPoint')
                 os.makedirs(os.path.dirname(spfile), exist_ok=True)
 
@@ -158,9 +159,8 @@ def computMeanCoord(gpsPoints):
     lon = 0.0
     lat = 0.0
     for point in gpsPoints:
-        fields = point.rstrip().split(',')
-        lon += float(fields[0])
-        lat += float(fields[1])
+        lon += float(point[0])
+        lat += float(point[1])
     return (lon / len(gpsPoints), lat / len(gpsPoints))
 
 
@@ -176,14 +176,18 @@ class StayPointExtractor(object):
     def __init__(self, path, distance_threshold=200, time_threshold=20*60):
         staypoints = []
         with open(path) as gps_log:
-            points = gps_log.readlines()[6:]  # first 6 lines are useless
+            valid_lines = filter(lambda x: x[0] >= 6,
+                                 enumerate(gps_log))
+            points = list(map(lambda line: line[1].rstrip().split(','),
+                              valid_lines))
+
             pointNum = len(points)
             i = 0
             while i < pointNum - 1:
                 j = i + 1
                 while j < pointNum:
-                    field_pointi = points[i].rstrip().split(',')
-                    field_pointj = points[j].rstrip().split(',')
+                    field_pointi = points[i]
+                    field_pointj = points[j]
                     dist = getDistance(float(field_pointi[0]),
                                        float(field_pointi[1]),
                                        float(field_pointj[0]),
@@ -214,8 +218,8 @@ class StayPointExtractor(object):
         for staypoint in self.staypoints:
             yield staypoint
 
-    def __len__(self):
-        return len(self.staypoints)
+    def __bool__(self):
+        return len(self.staypoints) > 0
 
 
 def setup_logger(args):
