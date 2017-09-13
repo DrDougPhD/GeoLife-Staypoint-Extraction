@@ -45,6 +45,7 @@ import csv
 
 import dateutil.parser
 import numpy
+import simplekml as simplekml
 import termcolor as termcolor
 from geopy import distance
 
@@ -75,6 +76,23 @@ DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
 )
 
 
+class StaypointKML(object):
+    def __init__(self, staypoints, raw_plt_file):
+        self.kml = simplekml.Kml()
+        self.add_raw_gps_trajectory(raw_plt_file)
+        self.add_staypoints(staypoints)
+
+
+    def save_to(self, path):
+        self.kml.save(path)
+
+    def add_raw_gps_trajectory(self, raw_plt_file):
+        pass
+
+    def add_staypoints(self, staypoints):
+        pass
+
+
 def main(args):
     plt_files = []
     for directory, subdirectories, filenames in os.walk(args.input_directory):
@@ -95,16 +113,17 @@ def main(args):
     plt_file_count = len(plt_files)
     with progressbar.ProgressBar(max_value=plt_file_count) as progress:
         # Iterate over each plt file
-        for i, plt_file in enumerate(plt_files, start=1):
-            logger.info(plt_file)
+        for i, plt_file_path in enumerate(plt_files, start=1):
+            logger.info(plt_file_path)
+            plt = PLTFileReader(path=plt_file_path)
 
             # Extract the staypoints from the GPS trajectory of this file
-            staypoints = StayPointExtractor(plt_file)
+            staypoints = StayPointExtractor(trajectory=plt)
 
             if staypoints:
 
                 # Write out staypoints to a new file
-                staypoint_file_path = plt_file.replace('Data', 'StayPoint')
+                staypoint_file_path = plt_file_path.replace('Data', 'StayPoint')
                 os.makedirs(os.path.dirname(staypoint_file_path), exist_ok=True)
 
                 with open(staypoint_file_path, 'w+') as staypoint_file:
@@ -114,6 +133,12 @@ def main(args):
                     )
                     staypoint_file_writer.writeheader()
                     staypoint_file_writer.writerows(staypoints)
+
+                if args.kml:
+                    kml_file_path = staypoint_file_path.replace('.plt', '.kml')
+                    kml = StaypointKML(staypoints=staypoints,
+                                       raw_plt_file=plt_file_path)
+                    kml.save_to(path=kml_file_path)
 
             progress.update(i)
 
@@ -163,6 +188,52 @@ class StayPoint(object):
         }
 
 
+class PLTFileReader(object):
+    def __init__(self, path):
+        with open(path) as gps_log:
+            # Ignore the first six lines of each file
+            valid_lines = filter(lambda x: x[0] >= 6,
+                                 enumerate(gps_log))
+            # Split the lines into seperate fields
+            # '39.890275,116.453691,0,157,39925.4486111111,2009-04-22,10:46:00'
+            #       mapped to
+            # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
+            #  '2009-04-22', '10:46:00']
+            raw_points = map(lambda line: line[1].rstrip().split(','),
+                             valid_lines)
+            # Extract only the lat, long, date, and time fields, merging the
+            #   date and time fields, and convert to the appropriate data types
+            # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
+            #  '2009-04-22', '10:46:00']
+            #       mapped to
+            # [(39.890275, 116.453691), datetime.datetime(2009, 4, 22, 10, 46)]
+            LATITUDE_INDEX = 0
+            LONGITUDE_INDEX = 1
+            DATE_INDEX = -2
+            TIME_INDEX = -1
+            points = map(
+                lambda raw_point: (
+                    (float(raw_point[LATITUDE_INDEX]),
+                     float(raw_point[LONGITUDE_INDEX])),
+                    dateutil.parser.parse(' '.join([raw_point[DATE_INDEX],
+                                                    raw_point[TIME_INDEX]]))
+                ),
+                raw_points
+            )
+            self.points = list(points)
+
+    def __getitem__(self, key):
+        # if isinstance(key, slice):
+        #     pass
+        #
+        # else:
+        #     pass
+        return self.points[key]
+
+    @property
+    def point_count(self):
+        return len(self.points)
+
 
 class StayPointExtractor(object):
     # Extract stay points from a GPS log file
@@ -172,51 +243,52 @@ class StayPointExtractor(object):
     fields = ['latitude', 'longitude',
               'arrival_time', 'departure_time']
 
-    def __init__(self, path, distance_threshold=200, time_threshold=20*60):
+    def __init__(self, trajectory, distance_threshold=200,
+                 time_threshold=20*60):
         staypoints = []
-        with open(path) as gps_log:
-            # Map raw lines in the GPS log into a tuple of lat, long,
-            # and timestamp.
-            # e.g.
-            # '39.89,116.45,0,157,39925.448611,2009-04-22,10:46:00\n'
-            #       is mapped to
-            # [(39.89, 116.45), datetime.datetime(2009, 4, 22, 10, 46)]
-            points = self.point_extractor(gps_log)
-            point_count = len(points)
+        # # Map raw lines in the GPS trajectory into a tuple of lat, long,
+        # # and timestamp.
+        # # e.g.
+        # # '39.89,116.45,0,157,39925.448611,2009-04-22,10:46:00\n'
+        # #       is mapped to
+        # # [(39.89, 116.45), datetime.datetime(2009, 4, 22, 10, 46)]
+        # points = self.point_extractor(trajectory=trajectory)
+        # point_count = len(points)
 
-            i = 0
-            while i < point_count - 1:
-                candidate_arrival = points[i]
+        point_count = trajectory.point_count
+        i = 0
+        while i < point_count - 1:
+            candidate_arrival = trajectory[i]
 
-                j = i + 1
-                while j < point_count:
-                    candidate_departure = points[j]
-                    dist = distance.vincenty(candidate_arrival[0],
-                                             candidate_departure[0]).meters
+            j = i + 1
+            while j < point_count:
+                candidate_departure = trajectory[j]
+                dist = distance.vincenty(candidate_arrival[0],
+                                         candidate_departure[0]).meters
 
-                    if dist > distance_threshold:
-                        duration = candidate_departure[1] - candidate_arrival[1]
+                if dist > distance_threshold:
+                    duration = candidate_departure[1] - candidate_arrival[1]
 
-                        if duration.total_seconds() > time_threshold:
-                            staypoint = StayPoint(points=points[i:j+1])
-                            staypoints.append(staypoint)
+                    if duration.total_seconds() > time_threshold:
+                        staypoint = StayPoint(points=trajectory[i:j+1])
+                        staypoints.append(staypoint)
 
-                            logger.debug(str(staypoint))
+                        logger.debug(str(staypoint))
 
-                        i = j
-                        break
+                    i = j
+                    break
 
-                    j += 1
+                j += 1
 
-                # Algorithm in [1] lacks following line
-                i += 1
+            # Algorithm in [1] lacks following line
+            i += 1
 
         self.staypoints = staypoints
         logger.info('{} staypoints extracted'.format(termcolor.colored(
             len(staypoints), 'green', attrs=['bold']
         )))
 
-    def point_extractor(self, gps_log):
+    def point_extractor(self, trajectory):
         # Ignore the first six lines of each file
         valid_lines = filter(lambda x: x[0] >= 6,
                              enumerate(gps_log))
@@ -303,6 +375,8 @@ def get_arguments():
     parser.add_argument('-i', '--input-directory', type=existing_directory,
                         help='directory containing .plt files',
                         default=existing_directory(DEFAULT_GEOLIFE_DIRECTORY))
+    parser.add_argument('--kml', action='store_true',
+                        help='also create .kml files (default: False)')
 
     args = parser.parse_args()
     return args
