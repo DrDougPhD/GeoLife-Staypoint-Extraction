@@ -64,14 +64,6 @@ import os
 import time
 
 from datetime import datetime
-from ctypes import c_double
-from ctypes import c_uint64
-from ctypes import Structure
-from math import radians
-from math import cos
-from math import sin
-from math import asin
-from math import sqrt
 
 
 DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
@@ -89,19 +81,28 @@ def main(args):
             # Skip any files within the previously created StayPoint directory
             continue
 
-        plt_files_within_directory = filter(lambda p: p.endswith('plt'),
+        # Only consider .plt files
+        plt_files_within_directory = filter(lambda p: p.endswith('.plt'),
                                             filenames)
+
+        # Prepend a file's directory to each filename
         plt_file_paths = map(lambda p: os.path.join(directory, p),
                              plt_files_within_directory)
+
         plt_files.extend(plt_file_paths)
 
     plt_file_count = len(plt_files)
     with progressbar.ProgressBar(max_value=plt_file_count) as progress:
+        # Iterate over each plt file
         for i, plt_file in enumerate(plt_files, start=1):
             logger.info(plt_file)
 
+            # Extract the staypoints from the GPS trajectory of this file
             staypoints = StayPointExtractor(plt_file)
+
             if staypoints:
+
+                # Write out staypoints to a new file
                 staypoint_file_path = plt_file.replace('Data', 'StayPoint')
                 os.makedirs(os.path.dirname(staypoint_file_path), exist_ok=True)
 
@@ -115,31 +116,12 @@ def main(args):
 
             progress.update(i)
 
-    """
-        for filename in filenames:
-            if filename.endswith('plt'):
-                gpsfile = os.path.join(dirname, filename)
-                
-    """
-
-
-class StayPoint(Structure):
-    _fields_ = [
-        ("longitude", c_double),
-        ("latitude", c_double),
-        ("arrivTime", c_uint64),
-        ("leaveTime", c_uint64)
-    ]
-
 
 class StayPointExtractor(object):
     # Extract stay points from a GPS log file
-    # Input:
-    #        file: the name of a GPS log file
-    #        distThres: distance threshold
-    #        timeThres: time span threshold
-    # Default values of distThres and timeThres are 200 m and 30 min respectively,
-    #  according to [1]
+    # Default values of distance_threshold and time_threshold are 200m and
+    #  30 min, respectively, according to [1].
+
     fields = ['latitude', 'longitude',
               'arrival_time', 'departure_time']
 
@@ -157,7 +139,7 @@ class StayPointExtractor(object):
 
             i = 0
             while i < point_count - 1:
-                point_i = points[i]
+                candidate_arrival = points[i]
             # for i, point_i in enumerate(points):
             #     if i == point_count - 1:
             #         break
@@ -166,12 +148,13 @@ class StayPointExtractor(object):
                     # distance = vincenty(point_i, point_j).meters
                 j = i + 1
                 while j < point_count:
-                    point_j = points[j]
-                    dist = distance.vincenty(point_i[0], point_j[0]).meters
+                    candidate_departure = points[j]
+                    dist = distance.vincenty(candidate_arrival[0],
+                                             candidate_departure[0]).meters
 
                     if dist > distance_threshold:
-                        arrival_timestamp = point_i[1]
-                        departure_timestamp = point_j[1]
+                        arrival_timestamp = candidate_arrival[1]
+                        departure_timestamp = candidate_departure[1]
                         duration = departure_timestamp - arrival_timestamp
 
                         if duration.total_seconds() > time_threshold:
@@ -211,8 +194,10 @@ class StayPointExtractor(object):
                         break
 
                     j += 1
+
                 # Algorithm in [1] lacks following line
                 i += 1
+
         self.staypoints = staypoints
 
     def point_extractor(self, gps_log):
@@ -261,7 +246,6 @@ class StayPointExtractor(object):
 def setup_logger(args):
     logger.setLevel(logging.DEBUG)
     # create file handler which logs even debug messages
-    # todo: place them in a log directory, or add the time to the log's
     # filename, or append to pre-existing log
     log_file = os.path.join('/tmp', __appname__ + '.log')
     fh = logging.FileHandler(log_file)
@@ -277,7 +261,7 @@ def setup_logger(args):
     # create formatter and add it to the handlers
     line_numbers_and_function_name = logging.Formatter(
         "%(levelname)s [%(filename)s:%(lineno)s - %(funcName)20s() ]"
-        "%(message)s")
+        " %(message)s")
     fh.setFormatter(line_numbers_and_function_name)
     ch.setFormatter(line_numbers_and_function_name)
     # add the handlers to the logger
@@ -302,11 +286,7 @@ def get_arguments():
                         default=True, help='verbose output')
     parser.add_argument('-i', '--input-directory', type=existing_directory,
                         help='directory containing .plt files',
-                        default=os.path.join(
-                            os.path.expanduser('~'),
-                            'Desktop', 'Research', 'Geolife Trajectories 1.3',
-                            'Data'
-                        ))
+                        default=existing_directory(DEFAULT_GEOLIFE_DIRECTORY))
 
     args = parser.parse_args()
     return args
