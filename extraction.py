@@ -41,6 +41,7 @@ LICENSE
 
 # Forked from code written by RustingSword on GitHub
 # https://gist.github.com/RustingSword/5215046
+import csv
 
 import dateutil.parser
 
@@ -101,29 +102,16 @@ def main(args):
 
             staypoints = StayPointExtractor(plt_file)
             if staypoints:
-                spfile = plt_file.replace('Data', 'StayPoint')
-                os.makedirs(os.path.dirname(spfile), exist_ok=True)
+                staypoint_file_path = plt_file.replace('Data', 'StayPoint')
+                os.makedirs(os.path.dirname(staypoint_file_path), exist_ok=True)
 
-                spfile_handle = open(spfile, 'w+')
-                print(('Extracted stay points:\n'
-                       'longitude\t'
-                       'laltitude\t'
-                       'arriving time\t'
-                       'leaving time'),
-                      file=spfile_handle)
-                for sp in staypoints:
-                    print('\t'.join(map(
-                        lambda v: str(v),
-                        [
-                            sp.latitude, sp.longitude,
-                            str(time.localtime(sp.arrivTime)),
-                            str(time.localtime(sp.leaveTime))
-                        ]
-                    )),
-                        file=spfile_handle
+                with open(staypoint_file_path, 'w+') as staypoint_file:
+                    staypoint_file_writer = csv.DictWriter(
+                        staypoint_file,
+                        fieldnames=staypoints.keys()
                     )
-
-                spfile_handle.close()
+                    staypoint_file_writer.writeheader()
+                    staypoint_file_writer.writerows(staypoints)
 
             progress.update(i)
 
@@ -173,6 +161,8 @@ class StayPointExtractor(object):
     #        timeThres: time span threshold
     # Default values of distThres and timeThres are 200 m and 30 min respectively,
     #  according to [1]
+    fields = ['latitude', 'longitude',
+              'arrival_time', 'departure_time']
 
     def __init__(self, path, distance_threshold=200, time_threshold=20*60):
         staypoints = []
@@ -204,16 +194,22 @@ class StayPointExtractor(object):
                     if dist > distance_threshold:
                         deltaT = (point_j[1] - point_i[1]).total_seconds()
                         if deltaT > time_threshold:
-                            sp = StayPoint()
-                            sp.latitude, sp.longitude = computMeanCoord(
+                            latitude, longitude = computMeanCoord(
                                 points[i:j + 1])
-                            sp.arrivTime = int(
+                            arrival_time = int(
                                 time.mktime(point_i[1].timetuple())
                             )
-                            sp.leaveTime = int(
+                            departure_time = int(
                                 time.mktime(point_j[1].timetuple())
                             )
-                            staypoints.append(sp)
+                            staypoint = {
+                                'latitude': latitude,
+                                'longitude': longitude,
+                                'arrival_time': arrival_time,
+                                'departure_time': departure_time
+                            }
+                            staypoints.append(staypoint)
+
                         i = j
                         break
                     j += 1
@@ -259,6 +255,9 @@ class StayPointExtractor(object):
 
     def __bool__(self):
         return len(self.staypoints) > 0
+
+    def keys(self):
+        return self.fields
 
 
 def setup_logger(args):
