@@ -46,6 +46,8 @@ import csv
 import dateutil.parser
 import numpy
 import simplekml as simplekml
+from polycircles import polycircles
+
 import termcolor as termcolor
 from geopy import distance
 
@@ -115,7 +117,7 @@ def main(args):
                         fieldnames=staypoints.keys()
                     )
                     staypoint_file_writer.writeheader()
-                    staypoint_file_writer.writerows(staypoints)
+                    staypoint_file_writer.writerows(staypoints.dict())
 
                 if args.kml:
                     kml_file_path = staypoint_file_path.replace('.plt', '.kml')
@@ -129,9 +131,9 @@ def main(args):
 
 class StayPoint(object):
     def __init__(self, points):
-        constituent_points = list(map(lambda p: p[0],
-                                      points))
-        staypoint_location = numpy.mean(constituent_points,
+        self.constituent_points = list(map(lambda p: p[0],
+                                           points))
+        staypoint_location = numpy.mean(self.constituent_points,
                                         axis=0)
         latitude = staypoint_location[0]
         longitude = staypoint_location[1]
@@ -153,9 +155,29 @@ class StayPoint(object):
         self.departure_time = departure_timestamp
         self.departure_time_epoch = departure_timestamp_epoch
 
+        self._radius = None
+
     @property
     def duration(self):
         return self.departure_time - self.arrival_time
+
+    @property
+    def radius(self):
+        if self._radius is None:
+            # find the point that is furthest from the staypoint
+            max_distance = float('-inf')
+            for point in self.constituent_points:
+                distance_to_staypoint = distance.vincenty(
+                    point,
+                    (self.latitude, self.longitude)
+                ).meters
+
+                if distance_to_staypoint > max_distance:
+                    max_distance = distance_to_staypoint
+
+            self._radius = int(max_distance)+1
+
+        return self._radius
 
     def __str__(self):
         return ('({0.latitude}, {0.longitude})'
@@ -229,22 +251,31 @@ class StaypointKML(object):
         plt = PLTFileReader(path=raw_plt_file)
 
         self.kml = simplekml.Kml()
-        self.add_raw_gps_trajectory(plt_file=plt)
+        self.add_trajectory(trajectory=plt.long_lat_pairs())
         self.add_staypoints(staypoints)
 
     def save_to(self, path):
         logger.info('Saving KML to {}'.format(path))
         self.kml.save(path)
 
-    def add_raw_gps_trajectory(self, plt_file):
+    def add_trajectory(self, trajectory):
         trajectory = self.kml.newlinestring(
             name='Trajectory',
             description='Raw GPS trajectory',
-            coords=plt_file.long_lat_pairs())
+            coords=trajectory)
         return trajectory
 
     def add_staypoints(self, staypoints):
-        pass
+        for staypoint in staypoints:
+            polycircle = polycircles.Polycircle(latitude=staypoint.latitude,
+                                                longitude=staypoint.longitude,
+                                                radius=staypoint.radius,
+                                                number_of_vertices=36)
+            pol = self.kml.newpolygon(name="Staypoint vicinity",
+                                      outerboundaryis=polycircle.to_kml())
+            pol.style.polystyle.color = \
+                simplekml.Color.changealphaint(staypoint.radius,
+                                               simplekml.Color.green)
 
 
 class StayPointExtractor(object):
@@ -302,13 +333,16 @@ class StayPointExtractor(object):
 
     def __iter__(self):
         for staypoint in self.staypoints:
-            yield staypoint.dict()
+            yield staypoint
 
     def __bool__(self):
         return len(self.staypoints) > 0
 
     def keys(self):
         return self.fields
+
+    def dict(self):
+        return [staypoint.dict() for staypoint in self.staypoints]
 
 
 def setup_logger(args):
