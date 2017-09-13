@@ -76,23 +76,6 @@ DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
 )
 
 
-class StaypointKML(object):
-    def __init__(self, staypoints, raw_plt_file):
-        self.kml = simplekml.Kml()
-        self.add_raw_gps_trajectory(raw_plt_file)
-        self.add_staypoints(staypoints)
-
-
-    def save_to(self, path):
-        self.kml.save(path)
-
-    def add_raw_gps_trajectory(self, raw_plt_file):
-        pass
-
-    def add_staypoints(self, staypoints):
-        pass
-
-
 def main(args):
     plt_files = []
     for directory, subdirectories, filenames in os.walk(args.input_directory):
@@ -140,6 +123,7 @@ def main(args):
                                        raw_plt_file=plt_file_path)
                     kml.save_to(path=kml_file_path)
 
+            logger.info('')
             progress.update(i)
 
 
@@ -220,7 +204,7 @@ class PLTFileReader(object):
                 ),
                 raw_points
             )
-            self.points = list(points)
+            self.timestamped_locations = list(points)
 
     def __getitem__(self, key):
         # if isinstance(key, slice):
@@ -228,11 +212,39 @@ class PLTFileReader(object):
         #
         # else:
         #     pass
-        return self.points[key]
+        return self.timestamped_locations[key]
 
     @property
     def point_count(self):
-        return len(self.points)
+        return len(self.timestamped_locations)
+
+    def long_lat_pairs(self):
+        return list(map(lambda p: (p[0][1], p[0][0]),
+                        self.timestamped_locations))
+
+
+class StaypointKML(object):
+    def __init__(self, staypoints, raw_plt_file):
+        logger.info('Creating KML file')
+        plt = PLTFileReader(path=raw_plt_file)
+
+        self.kml = simplekml.Kml()
+        self.add_raw_gps_trajectory(plt_file=plt)
+        self.add_staypoints(staypoints)
+
+    def save_to(self, path):
+        logger.info('Saving KML to {}'.format(path))
+        self.kml.save(path)
+
+    def add_raw_gps_trajectory(self, plt_file):
+        trajectory = self.kml.newlinestring(
+            name='Trajectory',
+            description='Raw GPS trajectory',
+            coords=plt_file.long_lat_pairs())
+        return trajectory
+
+    def add_staypoints(self, staypoints):
+        pass
 
 
 class StayPointExtractor(object):
@@ -287,38 +299,6 @@ class StayPointExtractor(object):
         logger.info('{} staypoints extracted'.format(termcolor.colored(
             len(staypoints), 'green', attrs=['bold']
         )))
-
-    def point_extractor(self, trajectory):
-        # Ignore the first six lines of each file
-        valid_lines = filter(lambda x: x[0] >= 6,
-                             enumerate(gps_log))
-        # Split the lines into seperate fields
-        # '39.890275,116.453691,0,157,39925.4486111111,2009-04-22,10:46:00'
-        #       mapped to
-        # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
-        #  '2009-04-22', '10:46:00']
-        raw_points = map(lambda line: line[1].rstrip().split(','),
-                         valid_lines)
-        # Extract only the lat, long, date, and time fields, merging the
-        #   date and time fields, and convert to the appropriate data types
-        # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
-        #  '2009-04-22', '10:46:00']
-        #       mapped to
-        # [(39.890275, 116.453691), datetime.datetime(2009, 4, 22, 10, 46)]
-        LATITUDE_INDEX = 0
-        LONGITUDE_INDEX = 1
-        DATE_INDEX = -2
-        TIME_INDEX = -1
-        points = map(
-            lambda raw_point: (
-                (float(raw_point[LATITUDE_INDEX]),
-                 float(raw_point[LONGITUDE_INDEX])),
-                dateutil.parser.parse(' '.join([raw_point[DATE_INDEX],
-                                                raw_point[TIME_INDEX]]))
-            ),
-            raw_points
-        )
-        return list(points)
 
     def __iter__(self):
         for staypoint in self.staypoints:
@@ -376,7 +356,8 @@ def get_arguments():
                         help='directory containing .plt files',
                         default=existing_directory(DEFAULT_GEOLIFE_DIRECTORY))
     parser.add_argument('--kml', action='store_true',
-                        help='also create .kml files (default: False)')
+                        help='also create .kml files (default: False)',
+                        default=True)
 
     args = parser.parse_args()
     return args
