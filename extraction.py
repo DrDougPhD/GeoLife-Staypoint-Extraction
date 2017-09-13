@@ -117,6 +117,46 @@ def main(args):
             progress.update(i)
 
 
+class StayPoint(object):
+    def __init__(self, points):
+        constituent_points = list(map(lambda p: p[0],
+                                      points))
+        staypoint_location = numpy.mean(constituent_points,
+                                        axis=0)
+        latitude = staypoint_location[0]
+        longitude = staypoint_location[1]
+
+        arrival_timestamp = points[0][1]
+        arrival_timestamp_epoch = int(
+            time.mktime(arrival_timestamp.timetuple())
+        )
+
+        departure_timestamp = points[-1][1]
+        departure_timestamp_epoch = int(
+            time.mktime(departure_timestamp.timetuple())
+        )
+        staypoint = {
+            'latitude': latitude,
+            'longitude': longitude,
+            'arrival_time': arrival_timestamp_epoch,
+            'departure_time': departure_timestamp_epoch
+        }
+        self.latitude = latitude
+        self.longitude = longitude
+        self.arrival_time = arrival_timestamp
+        self.departure_time = departure_timestamp
+
+    @property
+    def duration(self):
+        return self.departure_time - self.arrival_time
+
+    def __str__(self):
+        return ('({0.latitude}, {0.longitude})'
+                ' for {0.duration}'
+                ' ({0.arrival_time} to'
+                ' {0.departure_time})').format(self)
+
+
 class StayPointExtractor(object):
     # Extract stay points from a GPS log file
     # Default values of distance_threshold and time_threshold are 200m and
@@ -140,12 +180,7 @@ class StayPointExtractor(object):
             i = 0
             while i < point_count - 1:
                 candidate_arrival = points[i]
-            # for i, point_i in enumerate(points):
-            #     if i == point_count - 1:
-            #         break
-            #
-            #     for j, point_j in enumerate(points[i+1:]):
-                    # distance = vincenty(point_i, point_j).meters
+
                 j = i + 1
                 while j < point_count:
                     candidate_departure = points[j]
@@ -153,42 +188,13 @@ class StayPointExtractor(object):
                                              candidate_departure[0]).meters
 
                     if dist > distance_threshold:
-                        arrival_timestamp = candidate_arrival[1]
-                        departure_timestamp = candidate_departure[1]
-                        duration = departure_timestamp - arrival_timestamp
+                        duration = candidate_departure[1] - candidate_arrival[1]
 
                         if duration.total_seconds() > time_threshold:
-                            constituent_points = list(map(lambda p: p[0],
-                                                          points[i:j+1]))
-                            staypoint_location = numpy.mean(constituent_points,
-                                                            axis=0)
-                            latitude = staypoint_location[0]
-                            longitude = staypoint_location[1]
-
-                            arrival_timestamp_epoch = int(
-                                time.mktime(arrival_timestamp.timetuple())
-                            )
-                            departure_timestamp_epoch = int(
-                                time.mktime(departure_timestamp.timetuple())
-                            )
-                            staypoint = {
-                                'latitude': latitude,
-                                'longitude': longitude,
-                                'arrival_time': arrival_timestamp_epoch,
-                                'departure_time': departure_timestamp_epoch
-                            }
+                            staypoint = StayPoint(points=points[i:j+1])
                             staypoints.append(staypoint)
 
-                            logger.debug('({latitude}, {longitude})'
-                                         ' for {duration}'
-                                         ' ({arrival_time} to'
-                                         ' {departure_time})'.format(
-                                latitude=latitude,
-                                longitude=longitude,
-                                duration=departure_timestamp-arrival_timestamp,
-                                arrival_time=arrival_timestamp,
-                                departure_time=departure_timestamp
-                            ))
+                            logger.debug(str(staypoint))
 
                         i = j
                         break
@@ -234,7 +240,7 @@ class StayPointExtractor(object):
 
     def __iter__(self):
         for staypoint in self.staypoints:
-            yield staypoint
+            yield vars(staypoint)
 
     def __bool__(self):
         return len(self.staypoints) > 0
