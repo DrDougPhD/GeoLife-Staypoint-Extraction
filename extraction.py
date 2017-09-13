@@ -163,6 +163,24 @@ class StayPoint(object):
     def duration(self):
         return self.departure_time - self.arrival_time
 
+    @property
+    def radius(self):
+        if self._radius is None:
+            # find the point that is furthest from the staypoint
+            max_distance = float('-inf')
+            for point in self.constituent_points:
+                distance_to_staypoint = distance.vincenty(
+                    point,
+                    (self.latitude, self.longitude)
+                ).meters
+
+                if distance_to_staypoint > max_distance:
+                    max_distance = distance_to_staypoint
+
+            self._radius = int(max_distance)+1
+
+        return self._radius
+
     def __str__(self):
         return ('({0.latitude}, {0.longitude})'
                 ' for {0.duration}'
