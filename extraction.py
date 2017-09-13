@@ -44,6 +44,8 @@ LICENSE
 import csv
 
 import dateutil.parser
+import numpy
+from geopy import distance
 
 __appname__ = "plt2staypoints"
 __author__ = "Doug McGeehan"
@@ -70,8 +72,6 @@ from math import cos
 from math import sin
 from math import asin
 from math import sqrt
-#from scipy.spatial import distance
-#from geopy.distance import vincenty
 
 
 DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
@@ -132,27 +132,6 @@ class StayPoint(Structure):
     ]
 
 
-# calculate distance between two points from their coordinate
-def getDistance(lon1, lat1, lon2, lat2):
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-    c = 2 * asin(sqrt(a))
-    m = 6371000 * c
-    return m
-
-
-def computMeanCoord(gpsPoints):
-    lon = 0.0
-    lat = 0.0
-    for point in gpsPoints:
-        lon += float(point[0][0])
-        lat += float(point[0][1])
-    return (lon / len(gpsPoints), lat / len(gpsPoints))
-
-
 class StayPointExtractor(object):
     # Extract stay points from a GPS log file
     # Input:
@@ -188,30 +167,49 @@ class StayPointExtractor(object):
                 j = i + 1
                 while j < point_count:
                     point_j = points[j]
-                    dist = getDistance(*point_i[0],
-                                       *point_j[0])
+                    dist = distance.vincenty(point_i[0], point_j[0]).meters
 
                     if dist > distance_threshold:
-                        deltaT = (point_j[1] - point_i[1]).total_seconds()
-                        if deltaT > time_threshold:
-                            latitude, longitude = computMeanCoord(
-                                points[i:j + 1])
-                            arrival_time = int(
-                                time.mktime(point_i[1].timetuple())
+                        arrival_timestamp = point_i[1]
+                        departure_timestamp = point_j[1]
+                        duration = departure_timestamp - arrival_timestamp
+
+                        if duration.total_seconds() > time_threshold:
+                            constituent_points = list(map(lambda p: p[0],
+                                                          points[i:j+1]))
+                            staypoint_location = numpy.mean(constituent_points,
+                                                            axis=0)
+                            latitude = staypoint_location[0]
+                            longitude = staypoint_location[1]
+
+                            arrival_timestamp_epoch = int(
+                                time.mktime(arrival_timestamp.timetuple())
                             )
-                            departure_time = int(
-                                time.mktime(point_j[1].timetuple())
+                            departure_timestamp_epoch = int(
+                                time.mktime(departure_timestamp.timetuple())
                             )
                             staypoint = {
                                 'latitude': latitude,
                                 'longitude': longitude,
-                                'arrival_time': arrival_time,
-                                'departure_time': departure_time
+                                'arrival_time': arrival_timestamp_epoch,
+                                'departure_time': departure_timestamp_epoch
                             }
                             staypoints.append(staypoint)
 
+                            logger.debug('({latitude}, {longitude})'
+                                         ' for {duration}'
+                                         ' ({arrival_time} to'
+                                         ' {departure_time})'.format(
+                                latitude=latitude,
+                                longitude=longitude,
+                                duration=departure_timestamp-arrival_timestamp,
+                                arrival_time=arrival_timestamp,
+                                departure_time=departure_timestamp
+                            ))
+
                         i = j
                         break
+
                     j += 1
                 # Algorithm in [1] lacks following line
                 i += 1
@@ -301,10 +299,14 @@ def get_arguments():
     # during development, I set default to False so I don't have to keep
     # calling this with -v
     parser.add_argument('-v', '--verbose', action='store_true',
-                        default=False, help='verbose output')
+                        default=True, help='verbose output')
     parser.add_argument('-i', '--input-directory', type=existing_directory,
                         help='directory containing .plt files',
-                        required=True)
+                        default=os.path.join(
+                            os.path.expanduser('~'),
+                            'Desktop', 'Research', 'Geolife Trajectories 1.3',
+                            'Data'
+                        ))
 
     args = parser.parse_args()
     return args
