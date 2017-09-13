@@ -45,6 +45,7 @@ import csv
 
 import dateutil.parser
 import numpy
+import termcolor as termcolor
 from geopy import distance
 
 __appname__ = "plt2staypoints"
@@ -135,16 +136,13 @@ class StayPoint(object):
         departure_timestamp_epoch = int(
             time.mktime(departure_timestamp.timetuple())
         )
-        staypoint = {
-            'latitude': latitude,
-            'longitude': longitude,
-            'arrival_time': arrival_timestamp_epoch,
-            'departure_time': departure_timestamp_epoch
-        }
         self.latitude = latitude
         self.longitude = longitude
         self.arrival_time = arrival_timestamp
+        self.arrival_time_epoch = arrival_timestamp_epoch
+
         self.departure_time = departure_timestamp
+        self.departure_time_epoch = departure_timestamp_epoch
 
     @property
     def duration(self):
@@ -155,6 +153,15 @@ class StayPoint(object):
                 ' for {0.duration}'
                 ' ({0.arrival_time} to'
                 ' {0.departure_time})').format(self)
+
+    def dict(self):
+        return {
+            'latitude': self.latitude,
+            'longitude': self.longitude,
+            'arrival_time': self.arrival_time_epoch,
+            'departure_time': self.departure_time_epoch
+        }
+
 
 
 class StayPointExtractor(object):
@@ -205,6 +212,9 @@ class StayPointExtractor(object):
                 i += 1
 
         self.staypoints = staypoints
+        logger.info('{} staypoints extracted'.format(termcolor.colored(
+            len(staypoints), 'green', attrs=['bold']
+        )))
 
     def point_extractor(self, gps_log):
         # Ignore the first six lines of each file
@@ -240,7 +250,7 @@ class StayPointExtractor(object):
 
     def __iter__(self):
         for staypoint in self.staypoints:
-            yield vars(staypoint)
+            yield staypoint.dict()
 
     def __bool__(self):
         return len(self.staypoints) > 0
