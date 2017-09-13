@@ -1,0 +1,7 @@
+geopy==1.11.0
+numpy==1.13.1
+progressbar2==3.34.2
+python-dateutil==2.6.1
+python-utils==2.2.0
+scipy==0.19.1
+termcolor==1.1.0
