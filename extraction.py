@@ -51,6 +51,8 @@ from polycircles import polycircles
 import termcolor as termcolor
 from geopy import distance
 
+from gps2staypoint.utils import smallestenclosingcircle
+
 __appname__ = "plt2staypoints"
 __author__ = "Doug McGeehan"
 __version__ = "0.0pre0"
@@ -161,29 +163,14 @@ class StayPoint(object):
     def duration(self):
         return self.departure_time - self.arrival_time
 
-    @property
-    def radius(self):
-        if self._radius is None:
-            # find the point that is furthest from the staypoint
-            max_distance = float('-inf')
-            for point in self.constituent_points:
-                distance_to_staypoint = distance.vincenty(
-                    point,
-                    (self.latitude, self.longitude)
-                ).meters
-
-                if distance_to_staypoint > max_distance:
-                    max_distance = distance_to_staypoint
-
-            self._radius = int(max_distance)+1
-
-        return self._radius
-
     def __str__(self):
         return ('({0.latitude}, {0.longitude})'
                 ' for {0.duration}'
                 ' ({0.arrival_time} to'
-                ' {0.departure_time})').format(self)
+                ' {0.departure_time}).'
+                ' {0.radius} meter radius, {1} raw points.').format(
+            self, len(self.constituent_points)
+        )
 
     def dict(self):
         return {
@@ -267,15 +254,27 @@ class StaypointKML(object):
 
     def add_staypoints(self, staypoints):
         for staypoint in staypoints:
-            polycircle = polycircles.Polycircle(latitude=staypoint.latitude,
-                                                longitude=staypoint.longitude,
-                                                radius=staypoint.radius,
+            staypoint_location = (staypoint.longitude, staypoint.latitude)
+
+            lat, long, radius = smallestenclosingcircle.make_circle(
+                staypoint.constituent_points
+            )
+            western_most_point_on_circle = (long-radius, lat)
+            radius_in_meters = distance.vincenty(
+                western_most_point_on_circle,
+                staypoint_location
+            ).meters
+            polycircle = polycircles.Polycircle(latitude=lat,
+                                                longitude=long,
+                                                radius=radius_in_meters,
                                                 number_of_vertices=36)
             pol = self.kml.newpolygon(name="Staypoint vicinity",
                                       outerboundaryis=polycircle.to_kml())
             pol.style.polystyle.color = \
-                simplekml.Color.changealphaint(staypoint.radius,
-                                               simplekml.Color.green)
+                simplekml.Color.changealphaint(30, simplekml.Color.green)
+
+            self.kml.newpoint(name="Staypoint",
+                              coords=[staypoint_location])
 
 
 class StayPointExtractor(object):
