@@ -41,42 +41,36 @@ LICENSE
 
 # Forked from code written by RustingSword on GitHub
 # https://gist.github.com/RustingSword/5215046
-import csv
 
-import dateutil.parser
-import numpy
-import simplekml as simplekml
-from polycircles import polycircles
-
-import termcolor as termcolor
-from geopy import distance
-
-from gps2staypoint.utils import smallestenclosingcircle
-
-__appname__ = "plt2staypoints"
+__appname__ = "gps2staypoint"
 __author__ = "Doug McGeehan"
 __version__ = "0.0pre0"
 __license__ = "GNU GPLv3"
 
 import progressbar
+
 progressbar.streams.wrap_stderr()
 
 import logging
+
 logger = logging.getLogger(__appname__)
 
+import csv
 import argparse
 import sys
 import os
-import time
-
 from datetime import datetime
 
+from gps2staypoint.readers.plt import PLTFileReader
+from gps2staypoint.staypoint import StayPointExtractor
+from gps2staypoint.writers.kml import StaypointKML
 
 DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
     os.path.expanduser('~'),
     'Desktop',
     'Research',
-    'Geolife Trajectories 1.3'
+    'Geolife Trajectories 1.3',
+    'DataTest'
 )
 
 
@@ -129,237 +123,6 @@ def main(args):
 
             logger.info('')
             progress.update(i)
-
-
-class StayPoint(object):
-    def __init__(self, points):
-        self.constituent_points = list(map(lambda p: p[0],
-                                           points))
-        staypoint_location = numpy.mean(self.constituent_points,
-                                        axis=0)
-        latitude = staypoint_location[0]
-        longitude = staypoint_location[1]
-
-        arrival_timestamp = points[0][1]
-        arrival_timestamp_epoch = int(
-            time.mktime(arrival_timestamp.timetuple())
-        )
-
-        departure_timestamp = points[-1][1]
-        departure_timestamp_epoch = int(
-            time.mktime(departure_timestamp.timetuple())
-        )
-        self.latitude = latitude
-        self.longitude = longitude
-        self.arrival_time = arrival_timestamp
-        self.arrival_time_epoch = arrival_timestamp_epoch
-
-        self.departure_time = departure_timestamp
-        self.departure_time_epoch = departure_timestamp_epoch
-
-        self._radius = None
-
-    @property
-    def duration(self):
-        return self.departure_time - self.arrival_time
-
-    @property
-    def radius(self):
-        if self._radius is None:
-            # find the point that is furthest from the staypoint
-            max_distance = float('-inf')
-            for point in self.constituent_points:
-                distance_to_staypoint = distance.vincenty(
-                    point,
-                    (self.latitude, self.longitude)
-                ).meters
-
-                if distance_to_staypoint > max_distance:
-                    max_distance = distance_to_staypoint
-
-            self._radius = int(max_distance)+1
-
-        return self._radius
-
-    def __str__(self):
-        return ('({0.latitude}, {0.longitude})'
-                ' for {0.duration}'
-                ' ({0.arrival_time} to'
-                ' {0.departure_time}).'
-                ' {0.radius} meter radius, {1} raw points.').format(
-            self, len(self.constituent_points)
-        )
-
-    def dict(self):
-        return {
-            'latitude': self.latitude,
-            'longitude': self.longitude,
-            'arrival_time': self.arrival_time_epoch,
-            'departure_time': self.departure_time_epoch
-        }
-
-
-class PLTFileReader(object):
-    def __init__(self, path):
-        with open(path) as gps_log:
-            # Ignore the first six lines of each file
-            valid_lines = filter(lambda x: x[0] >= 6,
-                                 enumerate(gps_log))
-            # Split the lines into seperate fields
-            # '39.890275,116.453691,0,157,39925.4486111111,2009-04-22,10:46:00'
-            #       mapped to
-            # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
-            #  '2009-04-22', '10:46:00']
-            raw_points = map(lambda line: line[1].rstrip().split(','),
-                             valid_lines)
-            # Extract only the lat, long, date, and time fields, merging the
-            #   date and time fields, and convert to the appropriate data types
-            # ['39.890275', '116.453691', '0', '157', '39925.4486111111',
-            #  '2009-04-22', '10:46:00']
-            #       mapped to
-            # [(39.890275, 116.453691), datetime.datetime(2009, 4, 22, 10, 46)]
-            LATITUDE_INDEX = 0
-            LONGITUDE_INDEX = 1
-            DATE_INDEX = -2
-            TIME_INDEX = -1
-            points = map(
-                lambda raw_point: (
-                    (float(raw_point[LATITUDE_INDEX]),
-                     float(raw_point[LONGITUDE_INDEX])),
-                    dateutil.parser.parse(' '.join([raw_point[DATE_INDEX],
-                                                    raw_point[TIME_INDEX]]))
-                ),
-                raw_points
-            )
-            self.timestamped_locations = list(points)
-
-    def __getitem__(self, key):
-        # if isinstance(key, slice):
-        #     pass
-        #
-        # else:
-        #     pass
-        return self.timestamped_locations[key]
-
-    @property
-    def point_count(self):
-        return len(self.timestamped_locations)
-
-    def long_lat_pairs(self):
-        return list(map(lambda p: (p[0][1], p[0][0]),
-                        self.timestamped_locations))
-
-
-class StaypointKML(object):
-    def __init__(self, staypoints, raw_plt_file):
-        logger.info('Creating KML file')
-        plt = PLTFileReader(path=raw_plt_file)
-
-        self.kml = simplekml.Kml()
-        self.add_trajectory(trajectory=plt.long_lat_pairs())
-        self.add_staypoints(staypoints)
-
-    def save_to(self, path):
-        logger.info('Saving KML to {}'.format(path))
-        self.kml.save(path)
-
-    def add_trajectory(self, trajectory):
-        trajectory = self.kml.newlinestring(
-            name='Trajectory',
-            description='Raw GPS trajectory',
-            coords=trajectory)
-        return trajectory
-
-    def add_staypoints(self, staypoints):
-        for staypoint in staypoints:
-            staypoint_location = (staypoint.longitude, staypoint.latitude)
-
-            lat, long, radius = smallestenclosingcircle.make_circle(
-                staypoint.constituent_points
-            )
-            western_most_point_on_circle = (long-radius, lat)
-            radius_in_meters = distance.vincenty(
-                western_most_point_on_circle,
-                staypoint_location
-            ).meters
-            polycircle = polycircles.Polycircle(latitude=lat,
-                                                longitude=long,
-                                                radius=radius_in_meters,
-                                                number_of_vertices=36)
-            pol = self.kml.newpolygon(name="Staypoint vicinity",
-                                      outerboundaryis=polycircle.to_kml())
-            pol.style.polystyle.color = \
-                simplekml.Color.changealphaint(30, simplekml.Color.green)
-
-            self.kml.newpoint(name="Staypoint",
-                              coords=[staypoint_location])
-
-
-class StayPointExtractor(object):
-    # Extract stay points from a GPS log file
-    # Default values of distance_threshold and time_threshold are 200m and
-    #  30 min, respectively, according to [1].
-
-    fields = ['latitude', 'longitude',
-              'arrival_time', 'departure_time']
-
-    def __init__(self, trajectory, distance_threshold=200,
-                 time_threshold=20*60):
-        staypoints = []
-        # # Map raw lines in the GPS trajectory into a tuple of lat, long,
-        # # and timestamp.
-        # # e.g.
-        # # '39.89,116.45,0,157,39925.448611,2009-04-22,10:46:00\n'
-        # #       is mapped to
-        # # [(39.89, 116.45), datetime.datetime(2009, 4, 22, 10, 46)]
-        # points = self.point_extractor(trajectory=trajectory)
-        # point_count = len(points)
-
-        point_count = trajectory.point_count
-        i = 0
-        while i < point_count - 1:
-            candidate_arrival = trajectory[i]
-
-            j = i + 1
-            while j < point_count:
-                candidate_departure = trajectory[j]
-                dist = distance.vincenty(candidate_arrival[0],
-                                         candidate_departure[0]).meters
-
-                if dist > distance_threshold:
-                    duration = candidate_departure[1] - candidate_arrival[1]
-
-                    if duration.total_seconds() > time_threshold:
-                        staypoint = StayPoint(points=trajectory[i:j+1])
-                        staypoints.append(staypoint)
-
-                        logger.debug(str(staypoint))
-
-                    i = j
-                    break
-
-                j += 1
-
-            # Algorithm in [1] lacks following line
-            i += 1
-
-        self.staypoints = staypoints
-        logger.info('{} staypoints extracted'.format(termcolor.colored(
-            len(staypoints), 'green', attrs=['bold']
-        )))
-
-    def __iter__(self):
-        for staypoint in self.staypoints:
-            yield staypoint
-
-    def __bool__(self):
-        return len(self.staypoints) > 0
-
-    def keys(self):
-        return self.fields
-
-    def dict(self):
-        return [staypoint.dict() for staypoint in self.staypoints]
 
 
 def setup_logger(args):
@@ -424,7 +187,7 @@ if __name__ == '__main__':
         for arg in vars(args):
             value = getattr(args, arg)
             logger.debug('\t{argument_key}:\t{value}'.format(argument_key=arg,
-                                                           value=value))
+                                                             value=value))
 
         logger.debug(start_time)
 
