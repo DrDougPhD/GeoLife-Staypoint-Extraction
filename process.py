@@ -55,7 +55,7 @@ import csv
 import argparse
 import sys
 import os
-from datetime import datetime
+import datetime
 
 from gps2staypoint.readers.plt import PLTFileReader
 from gps2staypoint.staypoint import StayPointExtractor
@@ -68,10 +68,12 @@ DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
     'Geolife Trajectories 1.3',
     'Data'
 )
+GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD = datetime.timedelta(seconds=10)
 
 
 def main(args):
     # Find raw GPS trajectory files
+    logger.info('{:=^120}'.format(' Locating GPS Files '))
     plt_files = []
     for directory, subdirectories, filenames in os.walk(args.input_directory):
         if 'StayPoint' in directory:
@@ -89,6 +91,7 @@ def main(args):
         plt_files.extend(plt_file_paths)
 
     # Partition GPS trajectory files by the user that created them
+    logger.info('{:=^120}'.format(' Grouping GPS Files by User '))
     plt_files.sort()
     users = {}
     for plt_file_path in plt_files:
@@ -105,10 +108,23 @@ def main(args):
         user.add_plt_file(plt=plt)
 
     # Sort each user's PLT files by the time each file was created
+    logger.info('{:=^120}'.format(' Sorting GPS Files by Starttime '))
     for user in users.values():
         user.sort_trajectories_by_time()
 
+        logger.debug('User: #{}'.format(user.id))
+        for plt in user.gps_logs:
+            logger.debug('{0.start_time}: {0.path}'.format(plt))
+        logger.debug('')
 
+    # Iterate over trajectories for each user
+    logger.info('{:=^120}'.format(' Iterating over Trajectories '))
+    for user in users.values():
+        logger.debug('User: #{}'.format(user.id))
+        for trajectory in user.trajectories(
+                time_interval_threshold=GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD):
+            #logger.debug(trajectory)
+            pass
 
     # # Extract staypoints from each .plt file
     # plt_file_count = len(plt_files)
@@ -199,7 +215,7 @@ def get_arguments():
 
 if __name__ == '__main__':
     try:
-        start_time = datetime.now()
+        start_time = datetime.datetime.now()
 
         args = get_arguments()
         setup_logger(args)
@@ -213,7 +229,7 @@ if __name__ == '__main__':
 
         main(args)
 
-        finish_time = datetime.now()
+        finish_time = datetime.datetime.now()
         logger.debug(finish_time)
         logger.debug('Execution time: {time}'.format(
             time=(finish_time - start_time)
