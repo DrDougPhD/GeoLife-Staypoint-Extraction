@@ -1,10 +1,22 @@
 import logging
+
+from gps2staypoint.staypoint import StaypointBuilder
+
 logger = logging.getLogger(__name__)
+
+from geopy.distance import vincenty
 
 
 class GPSPoint(object):
     def __str__(self):
         return '({0.latitude}, {0.longitude}) @{0.timestamp}'.format(self)
+
+    def distance_to(self, point):
+        return vincenty(self.location, point.location).meters
+
+    @property
+    def location(self):
+        return (self.latitude, self.longitude)
 
 
 class GPSTrajectory(object):
@@ -33,6 +45,16 @@ class GPSTrajectory(object):
     @property
     def latest_time(self):
         return self.points[-1].timestamp
+
+    def staypoints(self, distance_threshold, time_threshold):
+        builder = StaypointBuilder(trajectory=self,
+                                   distance_threshold=distance_threshold,
+                                   time_threshold=time_threshold)
+        return builder.extract_staypoints()
+
+    def __iter__(self):
+        for p in self.points:
+            yield p
 
     def __str__(self):
         start = self.points[0].timestamp

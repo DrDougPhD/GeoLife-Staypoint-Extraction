@@ -3,7 +3,7 @@ logger = logging.getLogger(__name__)
 
 import progressbar
 
-from gps2staypoint.readers.plt import GPSTrajectory
+from gps2staypoint.gps import GPSTrajectory
 
 
 class GPSUser(object):
@@ -32,7 +32,6 @@ class GPSUser(object):
                 for i, gps_record in enumerate(log, start=1):
                     point_added = trajectory.add_point(point=gps_record)
                     if not point_added:
-                        logger.debug(trajectory)
                         yield trajectory
 
                         trajectory = GPSTrajectory(
