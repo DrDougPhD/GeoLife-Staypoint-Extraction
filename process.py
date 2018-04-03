@@ -67,7 +67,7 @@ DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
     'Geolife Trajectories 1.3',
     'Data'
 )
-GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD = datetime.timedelta(seconds=10)
+GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD = datetime.timedelta(minutes=5)
 STAYPOINT_TIME_THRESHOLD = datetime.timedelta(minutes=20)
 STAYPOINT_DISTANCE_THRESHOLD = 200
 
@@ -120,23 +120,41 @@ def main(args):
 
     # Iterate over trajectories for each user
     logger.info('{:=^120}'.format(' Iterating over Trajectories '))
-    extracted_staypoints = []
+    staypoints_and_source_trajectory = []
     for user in users.values():
         logger.debug('User: #{}'.format(user.id))
+
         for trajectory in user.trajectories(
                 time_interval_threshold=GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD):
-            logger.debug(trajectory)
+            logger.debug('New trajectory: {}'.format(trajectory))
+
+            trajectory.write_to_kml(directory='/tmp/kmls')
+
             staypoints = trajectory.staypoints(
                 time_threshold=STAYPOINT_TIME_THRESHOLD,
                 distance_threshold=STAYPOINT_DISTANCE_THRESHOLD,
             )
 
-            for p in staypoints:
-                extracted_staypoints.append(p)
-                logger.debug(p)
-            logger.debug('')
+            if staypoints:
+                staypoints_and_source_trajectory.append({
+                    'staypoints': staypoints,
+                    'user': user,
+                    'trajectory': trajectory,
+                })
 
-    logger.info('{} detected staypoints'.format(extracted_staypoints))
+                trajectory.write_to_kml(directory='/tmp/staypoints',
+                                        staypoints=staypoints)
+
+                for p in staypoints_and_source_trajectory[-1]['staypoints']:
+                    logger.debug(p)
+
+        logger.debug('')
+
+    for staypoint_info in staypoints_and_source_trajectory:
+        logger.debug('User:       #{}'.format(staypoint_info['user'].id))
+        logger.debug('Trajectory: {}'.format(staypoint_info['trajectory']))
+        logger.debug('Staypoints: {}'.format(staypoint_info['staypoints']))
+        logger.debug('')
 
     # # Extract staypoints from each .plt file
     # plt_file_count = len(plt_files)

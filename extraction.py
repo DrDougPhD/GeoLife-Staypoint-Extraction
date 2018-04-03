@@ -75,6 +75,7 @@ DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
 
 
 def main(args):
+    # Find raw GPS trajectory files
     plt_files = []
     for directory, subdirectories, filenames in os.walk(args.input_directory):
         if 'StayPoint' in directory:
@@ -91,6 +92,7 @@ def main(args):
 
         plt_files.extend(plt_file_paths)
 
+    # Extract staypoints from each .plt file
     plt_file_count = len(plt_files)
     with progressbar.ProgressBar(max_value=plt_file_count) as progress:
         # Iterate over each plt file

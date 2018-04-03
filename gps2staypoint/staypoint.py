@@ -80,10 +80,10 @@ class StaypointBuilder(object):
         self.distance_threshold = distance_threshold
 
     def extract_staypoints(self):
+        staypoints = []
         staypoint = StayPoint(time_threshold=self.time_threshold,
                               distance_threshold=self.distance_threshold)
         skipped_staypoints = 0
-        detected_staypoints = 0
 
         for point in self.trajectory:
             point_added = staypoint.add_point(point=point)
@@ -91,8 +91,7 @@ class StaypointBuilder(object):
             if not point_added:
                 if staypoint.is_valid():
                     logger.debug(staypoint)
-                    yield staypoint
-                    detected_staypoints += 1
+                    staypoints.append(staypoint)
 
                 else:
                     skipped_staypoints += 1
@@ -103,11 +102,14 @@ class StaypointBuilder(object):
                     initial_point=point,
                 )
 
-        logger.debug('{: >4} detected staypoints,'
-                     '{: >4} skipped staypoints'.format(
-            detected_staypoints,
-            skipped_staypoints,
-        ))
+        if staypoints:
+            logger.debug('{: >4} detected staypoints,'
+                         '{: >4} skipped staypoints'.format(
+                len(staypoints),
+                skipped_staypoints,
+            ))
+
+        return staypoints
 
     #     self.constituent_points = list(map(lambda p: p[0],
     #                                        points))

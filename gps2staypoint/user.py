@@ -24,7 +24,8 @@ class GPSUser(object):
         '''
 
         trajectory = GPSTrajectory(
-            time_interval_threshold=time_interval_threshold
+            time_interval_threshold=time_interval_threshold,
+            user=self,
         )
         for log in self.gps_logs:
             logger.debug('Reading {}'.format(log.path))
@@ -36,7 +37,8 @@ class GPSUser(object):
 
                         trajectory = GPSTrajectory(
                             time_interval_threshold=time_interval_threshold,
-                            initial_point=gps_record
+                            initial_point=gps_record,
+                            user=self,
                         )
 
                     progress.update(i)

@@ -5,41 +5,37 @@ import simplekml
 from geopy import distance
 from polycircles import polycircles
 
-from gps2staypoint.readers.plt import PLTFileReader
 from gps2staypoint.utils import smallestenclosingcircle
 
-
 class StaypointKML(object):
-    def __init__(self, staypoints, raw_plt_file):
-        logger.info('Creating KML file')
-        plt = PLTFileReader(path=raw_plt_file)
-
+    def __init__(self, path):
+        self.path = path
         self.kml = simplekml.Kml()
-        self.add_trajectory(trajectory=plt.long_lat_pairs())
-        self.add_staypoints(staypoints)
-
-    def save_to(self, path):
-        logger.info('Saving KML to {}'.format(path))
-        self.kml.save(path)
 
     def add_trajectory(self, trajectory):
-        trajectory = self.kml.newlinestring(
+        points = map(
+            lambda p: tuple(reversed(p.location)),
+            trajectory
+        )
+        return self.kml.newlinestring(
             name='Trajectory',
             description='Raw GPS trajectory',
-            coords=trajectory)
-        return trajectory
+            coords=points
+        )
 
     def add_staypoints(self, staypoints):
         for staypoint in staypoints:
-            staypoint_location = (staypoint.longitude, staypoint.latitude)
-
-            lat, long, radius = smallestenclosingcircle.make_circle(
-                staypoint.constituent_points
+            staypoint_points = map(
+                lambda p: p.location,
+                staypoint.points
             )
-            western_most_point_on_circle = (long-radius, lat)
+            lat, long, radius = smallestenclosingcircle.make_circle(
+                staypoint_points
+            )
+            western_most_point_on_circle = (lat, long-radius)
             radius_in_meters = distance.vincenty(
                 western_most_point_on_circle,
-                staypoint_location
+                staypoint.location
             ).meters
             polycircle = polycircles.Polycircle(latitude=lat,
                                                 longitude=long,
@@ -51,4 +47,8 @@ class StaypointKML(object):
                 simplekml.Color.changealphaint(30, simplekml.Color.green)
 
             self.kml.newpoint(name="Staypoint",
-                              coords=[staypoint_location])
+                              coords=[tuple(reversed(staypoint.location))])
+
+    def save(self):
+        logger.info('Saving KML to {}'.format(self.path))
+        self.kml.save(self.path)
