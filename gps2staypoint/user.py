@@ -1,9 +1,11 @@
 import logging
-logger = logging.getLogger(__name__)
-
 import progressbar
+from geopy.distance import vincenty
 
 from gps2staypoint.gps import GPSTrajectory
+from gps2staypoint.utils import colorize
+
+logger = logging.getLogger(__name__)
 
 
 class GPSUser(object):
@@ -33,8 +35,33 @@ class GPSUser(object):
                 for i, gps_record in enumerate(log, start=1):
                     point_added = trajectory.add_point(point=gps_record)
                     if not point_added:
-                        yield trajectory
 
+                        # Print out information about the change in trajectory
+                        last_point_of_trajectory = trajectory.points[-1]
+                        time_difference = gps_record.timestamp\
+                                        - last_point_of_trajectory.timestamp
+                        distance = vincenty(
+                            last_point_of_trajectory.location,
+                            gps_record.location
+                        ).meters
+                        logger.debug('Trajectory: {}'.format(trajectory))
+                        logger.debug('\t{} meters, {} time diff to new '
+                                     'trajectory'.format(
+                            colorize.distance(distance),
+                            colorize.time_difference(time_difference)
+                        ))
+                        logger.debug('\t{} to {}'.format(
+                            last_point_of_trajectory.location,
+                            gps_record.location,
+                        ))
+                        logger.debug('\t{} to {}'.format(
+                            last_point_of_trajectory.timestamp,
+                            gps_record.timestamp
+                        ))
+                        logger.debug('')
+
+                        # Yield the previous trajectory and create a new one
+                        yield trajectory
                         trajectory = GPSTrajectory(
                             time_interval_threshold=time_interval_threshold,
                             initial_point=gps_record,

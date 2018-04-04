@@ -17,7 +17,11 @@ class StaypointKML(object):
             lambda p: tuple(reversed(p.location)),
             trajectory
         )
-        return self.kml.newlinestring(
+        for p in trajectory:
+            point = self.kml.newpoint(name=str(p.timestamp))
+            point.coords = [tuple(reversed(p.location))]
+
+        line = self.kml.newlinestring(
             name='Trajectory',
             description='Raw GPS trajectory',
             coords=points

@@ -38,6 +38,7 @@ LICENSE
 #       Geographic Information Systems, New York, NY, USA, 2008,
 #       pp. 34:1--34:10.
 #       https://doi.org/10.1145/1463434.1463477
+from gps2staypoint import config
 from gps2staypoint.user import GPSUser
 
 __appname__ = "gps2staypoint"
@@ -51,25 +52,12 @@ progressbar.streams.wrap_stderr()
 import logging
 logger = logging.getLogger(__appname__)
 
-import csv
 import argparse
 import sys
 import os
 import datetime
 
 from gps2staypoint.readers.plt import PLTFileReader
-from gps2staypoint.writers.kml import StaypointKML
-
-DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
-    os.path.expanduser('~'),
-    'Desktop',
-    'Research',
-    'Geolife Trajectories 1.3',
-    'Data'
-)
-GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD = datetime.timedelta(minutes=5)
-STAYPOINT_TIME_THRESHOLD = datetime.timedelta(minutes=20)
-STAYPOINT_DISTANCE_THRESHOLD = 200
 
 
 def main(args):
@@ -125,14 +113,15 @@ def main(args):
         logger.debug('User: #{}'.format(user.id))
 
         for trajectory in user.trajectories(
-                time_interval_threshold=GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD):
-            logger.debug('New trajectory: {}'.format(trajectory))
+                time_interval_threshold=config\
+                        .GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD):
+            # logger.debug('New trajectory: {}'.format(trajectory))
 
-            trajectory.write_to_kml(directory='/tmp/kmls')
+            # trajectory.write_to_kml(directory='/tmp/kmls')
 
             staypoints = trajectory.staypoints(
-                time_threshold=STAYPOINT_TIME_THRESHOLD,
-                distance_threshold=STAYPOINT_DISTANCE_THRESHOLD,
+                time_threshold=config.STAYPOINT_TIME_THRESHOLD,
+                distance_threshold=config.STAYPOINT_DISTANCE_THRESHOLD,
             )
 
             if staypoints:
@@ -142,19 +131,19 @@ def main(args):
                     'trajectory': trajectory,
                 })
 
-                trajectory.write_to_kml(directory='/tmp/staypoints',
-                                        staypoints=staypoints)
+                # trajectory.write_to_kml(directory='/tmp/staypoints',
+                #                         staypoints=staypoints)
 
                 for p in staypoints_and_source_trajectory[-1]['staypoints']:
                     logger.debug(p)
 
         logger.debug('')
 
-    for staypoint_info in staypoints_and_source_trajectory:
-        logger.debug('User:       #{}'.format(staypoint_info['user'].id))
-        logger.debug('Trajectory: {}'.format(staypoint_info['trajectory']))
-        logger.debug('Staypoints: {}'.format(staypoint_info['staypoints']))
-        logger.debug('')
+    # for staypoint_info in staypoints_and_source_trajectory:
+    #     logger.debug('User:       #{}'.format(staypoint_info['user'].id))
+    #     logger.debug('Trajectory: {}'.format(staypoint_info['trajectory']))
+    #     logger.debug('Staypoints: {}'.format(staypoint_info['staypoints']))
+    #     logger.debug('')
 
     # # Extract staypoints from each .plt file
     # plt_file_count = len(plt_files)
@@ -234,7 +223,9 @@ def get_arguments():
                         default=True, help='verbose output')
     parser.add_argument('-i', '--input-directory', type=existing_directory,
                         help='directory containing .plt files',
-                        default=existing_directory(DEFAULT_GEOLIFE_DIRECTORY))
+                        default=existing_directory(
+                            config.DEFAULT_GEOLIFE_DIRECTORY
+                        ))
     parser.add_argument('--kml', action='store_true',
                         help='also create .kml files (default: False)',
                         default=True)
