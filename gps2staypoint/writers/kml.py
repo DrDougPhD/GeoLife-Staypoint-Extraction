@@ -1,11 +1,12 @@
 import logging
-logger = logging.getLogger(__name__)
-
 import simplekml
 from geopy import distance
 from polycircles import polycircles
 
 from gps2staypoint.utils import smallestenclosingcircle
+
+logger = logging.getLogger(__name__)
+
 
 class StaypointKML(object):
     def __init__(self, path):
@@ -17,9 +18,9 @@ class StaypointKML(object):
             lambda p: tuple(reversed(p.location)),
             trajectory
         )
-        for p in trajectory:
-            point = self.kml.newpoint(name=str(p.timestamp))
-            point.coords = [tuple(reversed(p.location))]
+        # for p in trajectory:
+        #     point = self.kml.newpoint(name=str(p.timestamp))
+        #     point.coords = [tuple(reversed(p.location))]
 
         line = self.kml.newlinestring(
             name='Trajectory',

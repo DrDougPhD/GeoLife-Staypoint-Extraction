@@ -114,7 +114,7 @@ def main(args):
     for user in users.values():
         logger.debug('User: #{}'.format(user.id))
 
-        trajectories = user.trajectories()
+        trajectories = user.trajectories
         for trajectory in trajectories:
             trajectory.write_to_kml(directory='/tmp/kmls')
 

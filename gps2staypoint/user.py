@@ -20,6 +20,7 @@ class GPSUser(object):
     def sort_trajectories_by_time(self):
         self.gps_logs.sort(key=lambda p: p.start_time)
 
+    @property
     def trajectories(self):
         '''Split GPS logs into trajectories, determined by the time 
         difference between two consecutive GPS records exceeding the defined 
@@ -64,6 +65,7 @@ class GPSUser(object):
                         self._trajectories.append(trajectory)
                         trajectory.summarize()
                         logger.debug('')
+                        yield trajectory
 
                         trajectory = GPSTrajectory(
                             initial_point=gps_record,
@@ -72,4 +74,4 @@ class GPSUser(object):
 
                     progress.update(i)
         self._trajectories.append(trajectory)
-        return self._trajectories
+        yield trajectory

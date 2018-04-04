@@ -1,5 +1,6 @@
 import logging
 import os
+from geopy.distance import vincenty
 
 from gps2staypoint import config
 from gps2staypoint.staypoint import StaypointBuilder
@@ -7,12 +8,8 @@ from gps2staypoint.writers.kml import StaypointKML
 
 logger = logging.getLogger(__name__)
 
-from geopy.distance import vincenty
-
 
 class GPSPoint(object):
-    def __str__(self):
-        return '({0.latitude}, {0.longitude}) @{0.timestamp}'.format(self)
 
     def distance_to(self, point):
         return vincenty(self.location, point.location).meters
@@ -20,6 +17,9 @@ class GPSPoint(object):
     @property
     def location(self):
         return (self.latitude, self.longitude)
+
+    def __str__(self):
+        return '({0.latitude}, {0.longitude}) @{0.timestamp}'.format(self)
 
 
 class GPSTrajectory(object):
@@ -83,8 +83,10 @@ class GPSTrajectory(object):
         kml.save()
 
     def summarize(self):
-        for staypoint in self.staypoints:
-            pass
+        staypoints = self.staypoints
+        logger.debug('\t{} staypoints:'.format(len(staypoints)))
+        for staypoint in staypoints:
+            logger.debug('\t{}'.format(staypoint))
 
     def __iter__(self):
         for p in self.points:
