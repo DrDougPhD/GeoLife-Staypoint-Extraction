@@ -62,7 +62,7 @@ from gps2staypoint.readers.plt import PLTFileReader
 
 def main(args):
     # Find raw GPS trajectory files
-    logger.info('{:=^120}'.format(' Locating GPS Files '))
+    logger.info('Locating GPS Files')
     plt_files = []
     for directory, subdirectories, filenames in os.walk(args.input_directory):
         if 'StayPoint' in directory:
@@ -80,11 +80,11 @@ def main(args):
         plt_files.extend(plt_file_paths)
 
     # Partition GPS trajectory files by the user that created them
-    logger.info('{:=^120}'.format(' Grouping GPS Files by User '))
+    logger.info('Grouping GPS Files by User')
     plt_files.sort()
     users = {}
     for plt_file_path in plt_files:
-        logger.info(plt_file_path)
+        logger.debug(plt_file_path)
         plt = PLTFileReader(path=plt_file_path)
         user_id = plt.user
 
@@ -97,7 +97,7 @@ def main(args):
         user.add_plt_file(plt=plt)
 
     # Sort each user's PLT files by the time each file was created
-    logger.info('{:=^120}'.format(' Sorting GPS Files by Starttime '))
+    logger.info('Sorting GPS Files by Starttime')
     for user in users.values():
         user.sort_trajectories_by_time()
 
@@ -109,15 +109,15 @@ def main(args):
     # Iterate over trajectories for each user
     # Extract staypoints on each trajectory
     # Save each trajectory to a KML for inspection
-    logger.info('{:=^120}'.format(' Iterating over Trajectories '))
+    logger.info('Iterating over Trajectories')
     staypoints_and_source_trajectory = []
     for user in users.values():
         logger.debug('User: #{}'.format(user.id))
 
         trajectories = user.trajectories
         for trajectory in trajectories:
+            trajectory.summarize()
             trajectory.write_to_kml(directory='/tmp/kmls')
-
         logger.debug('')
 
     # for staypoint_info in staypoints_and_source_trajectory:

@@ -13,8 +13,9 @@ GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD = datetime.timedelta(minutes=20)
 
 
 class StayPointConfiguration(object):
-    TIME_THRESHOLD = datetime.timedelta(minutes=20)
-    DISTANCE_THRESHOLD = 200 # meters
+    TIME_THRESHOLD = datetime.timedelta(minutes=3)
+    #datetime.timedelta(minutes=20)
+    DISTANCE_THRESHOLD = 100 #200 # meters
 
 
 class Colors(object):

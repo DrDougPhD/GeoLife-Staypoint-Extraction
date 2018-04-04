@@ -18,7 +18,9 @@ class StayPoint(config.StayPointConfiguration):
 
         else:
             first_point = self.points[0]
-            if first_point.distance_to(point) > self.DISTANCE_THRESHOLD:
+            distance = first_point.distance_to(point)
+            # logger.debug('\tDistance: {}'.format(distance))
+            if distance > self.DISTANCE_THRESHOLD:
                 return False
 
             else:
@@ -29,6 +31,9 @@ class StayPoint(config.StayPointConfiguration):
         first_point = self.points[0]
         last_point = self.points[-1]
         time_difference = last_point.timestamp - first_point.timestamp
+        # logger.debug('Time difference between first and last points: '
+        #              '{}'.format(time_difference))
+        # logger.debug(self.TIME_THRESHOLD)
         if time_difference >= self.TIME_THRESHOLD:
             return True
         else:
@@ -78,6 +83,8 @@ class StaypointBuilder(object):
         self.trajectory = trajectory
 
     def extract_staypoints(self):
+        # logger.debug('\tExtracting staypoints')
+
         staypoints = []
         staypoint = StayPoint()
         skipped_staypoints = 0
@@ -87,7 +94,7 @@ class StaypointBuilder(object):
 
             if not point_added:
                 if staypoint.is_valid():
-                    logger.debug(staypoint)
+                    # logger.debug('\t{}'.format(staypoint))
                     staypoints.append(staypoint)
 
                 else:
@@ -101,6 +108,56 @@ class StaypointBuilder(object):
                 len(staypoints),
                 skipped_staypoints,
             ))
+
+        return staypoints
+
+    def _extract_staypoints(self):
+        logger.debug('Extracting staypoints')
+        staypoints = []
+        skip_points_before_index = 0
+        trajectory_length = len(self.trajectory)
+
+        for i, starting_point in enumerate(self.trajectory):
+            # Skip trying to create a staypoint starting at the last point
+            if i + 1 == trajectory_length:
+                break
+
+            if i < skip_points_before_index:
+                logger.debug('Skipping point #{}'.format(i))
+                continue
+
+            logger.debug('Building new point at #{}'.format(i))
+            staypoint = StayPoint(initial_point=starting_point)
+
+            # Build up the staypoint starting from points immediately after
+            # the starting point
+            for j in range(i + 1, trajectory_length):
+                next_point = self.trajectory[j]
+                point_added = staypoint.add_point(point=next_point)
+
+                # If this point cannot be a part of the current staypoint,
+                # then check if the current staypoint is valid.
+                if point_added:
+                    # logger.debug('\tAdded #{}: {}'.format(j, next_point))
+                    pass
+
+                else:
+                    logger.debug('\tStaypoint finished.')
+                    if staypoint.is_valid():
+                        logger.debug('\tValid staypoint!')
+                        logger.debug('\t{}'.format(staypoint))
+                        staypoints.append(staypoint)
+                        skip_points_before_index = j
+
+                        logger.debug('')
+                    else:
+                        logger.debug('\tInvalid staypoint.')
+
+                    break
+
+        if staypoints:
+            logger.debug(
+                '{: >4} detected staypoints'.format(len(staypoints)))
 
         return staypoints
 

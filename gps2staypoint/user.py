@@ -35,8 +35,15 @@ class GPSUser(object):
             logger.debug('Reading {}'.format(log.path))
             with progressbar.ProgressBar(max_value=len(log)) as progress:
                 for i, gps_record in enumerate(log, start=1):
+                    progress.update(i)
+
                     point_added = trajectory.add_point(point=gps_record)
-                    if not point_added:
+                    if point_added:
+                        # logger.debug('\tAdded point {}'.format(gps_record))
+                        pass
+
+                    else:
+                        # logger.debug('\tTrajectory finished!')
 
                         # Print out information about the change in trajectory
                         last_point_of_trajectory = trajectory.points[-1]
@@ -63,15 +70,14 @@ class GPSUser(object):
 
                         # Yield the previous trajectory and create a new one
                         self._trajectories.append(trajectory)
-                        trajectory.summarize()
-                        logger.debug('')
+                        # trajectory.summarize()
                         yield trajectory
 
+                        logger.debug('')
                         trajectory = GPSTrajectory(
                             initial_point=gps_record,
                             user=self,
                         )
 
-                    progress.update(i)
         self._trajectories.append(trajectory)
         yield trajectory

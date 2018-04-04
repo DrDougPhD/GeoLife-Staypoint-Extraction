@@ -73,7 +73,7 @@ class GPSTrajectory(object):
             end=self.latest_time.strftime("%s"),
         )
         path = os.path.join(directory, filename)
-        logger.debug('Saving trajectory to {}'.format(path))
+        # logger.debug('Saving trajectory to {}'.format(path))
 
         kml = StaypointKML(path=path)
         kml.add_trajectory(trajectory=self)
@@ -84,13 +84,18 @@ class GPSTrajectory(object):
 
     def summarize(self):
         staypoints = self.staypoints
-        logger.debug('\t{} staypoints:'.format(len(staypoints)))
         for staypoint in staypoints:
             logger.debug('\t{}'.format(staypoint))
 
     def __iter__(self):
         for p in self.points:
             yield p
+
+    def __getitem__(self, index):
+        return self.points[index]
+
+    def __len__(self):
+        return len(self.points)
 
     def __str__(self):
         start = self.earliest_time
