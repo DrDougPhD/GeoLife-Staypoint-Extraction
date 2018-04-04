@@ -12,6 +12,7 @@ class GPSUser(object):
     def __init__(self, id):
         self.id = id
         self.gps_logs = []
+        self._trajectories = None
 
     def add_plt_file(self, plt):
         self.gps_logs.append(plt)
@@ -19,16 +20,16 @@ class GPSUser(object):
     def sort_trajectories_by_time(self):
         self.gps_logs.sort(key=lambda p: p.start_time)
 
-    def trajectories(self, time_interval_threshold):
+    def trajectories(self):
         '''Split GPS logs into trajectories, determined by the time 
         difference between two consecutive GPS records exceeding the defined 
         threshold.
         '''
+        if self._trajectories is not None:
+            return self._trajectories
 
-        trajectory = GPSTrajectory(
-            time_interval_threshold=time_interval_threshold,
-            user=self,
-        )
+        self._trajectories = []
+        trajectory = GPSTrajectory(user=self)
         for log in self.gps_logs:
             logger.debug('Reading {}'.format(log.path))
             with progressbar.ProgressBar(max_value=len(log)) as progress:
@@ -58,14 +59,17 @@ class GPSUser(object):
                             last_point_of_trajectory.timestamp,
                             gps_record.timestamp
                         ))
-                        logger.debug('')
 
                         # Yield the previous trajectory and create a new one
-                        yield trajectory
+                        self._trajectories.append(trajectory)
+                        trajectory.summarize()
+                        logger.debug('')
+
                         trajectory = GPSTrajectory(
-                            time_interval_threshold=time_interval_threshold,
                             initial_point=gps_record,
                             user=self,
                         )
 
                     progress.update(i)
+        self._trajectories.append(trajectory)
+        return self._trajectories

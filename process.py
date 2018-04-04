@@ -107,35 +107,16 @@ def main(args):
         logger.debug('')
 
     # Iterate over trajectories for each user
+    # Extract staypoints on each trajectory
+    # Save each trajectory to a KML for inspection
     logger.info('{:=^120}'.format(' Iterating over Trajectories '))
     staypoints_and_source_trajectory = []
     for user in users.values():
         logger.debug('User: #{}'.format(user.id))
 
-        for trajectory in user.trajectories(
-                time_interval_threshold=config\
-                        .GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD):
-            # logger.debug('New trajectory: {}'.format(trajectory))
-
-            # trajectory.write_to_kml(directory='/tmp/kmls')
-
-            staypoints = trajectory.staypoints(
-                time_threshold=config.STAYPOINT_TIME_THRESHOLD,
-                distance_threshold=config.STAYPOINT_DISTANCE_THRESHOLD,
-            )
-
-            if staypoints:
-                staypoints_and_source_trajectory.append({
-                    'staypoints': staypoints,
-                    'user': user,
-                    'trajectory': trajectory,
-                })
-
-                # trajectory.write_to_kml(directory='/tmp/staypoints',
-                #                         staypoints=staypoints)
-
-                for p in staypoints_and_source_trajectory[-1]['staypoints']:
-                    logger.debug(p)
+        trajectories = user.trajectories()
+        for trajectory in trajectories:
+            trajectory.write_to_kml(directory='/tmp/kmls')
 
         logger.debug('')
 

@@ -1,6 +1,7 @@
 import logging
 import os
 
+from gps2staypoint import config
 from gps2staypoint.staypoint import StaypointBuilder
 from gps2staypoint.writers.kml import StaypointKML
 
@@ -22,9 +23,11 @@ class GPSPoint(object):
 
 
 class GPSTrajectory(object):
-    def __init__(self, time_interval_threshold, user, initial_point=None):
-        self.threshold = time_interval_threshold
+    TIME_INTERVAL_THRESHOLD = config.GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD
+
+    def __init__(self, user, initial_point=None):
         self.user = user
+        self._staypoints = None
 
         self.points = []
         if initial_point is not None:
@@ -38,7 +41,7 @@ class GPSTrajectory(object):
         else:
             time_difference = point.timestamp - self.latest_time
             # logger.debug('Time difference between points: {}'.format(time_difference))
-            if time_difference >= self.threshold:
+            if time_difference >= self.TIME_INTERVAL_THRESHOLD:
                 return False
 
             else:
@@ -53,13 +56,14 @@ class GPSTrajectory(object):
     def earliest_time(self):
         return self.points[0].timestamp
 
-    def staypoints(self, distance_threshold, time_threshold):
-        builder = StaypointBuilder(trajectory=self,
-                                   distance_threshold=distance_threshold,
-                                   time_threshold=time_threshold)
-        return builder.extract_staypoints()
+    @property
+    def staypoints(self):
+        if self._staypoints is None:
+            builder = StaypointBuilder(trajectory=self)
+            self._staypoints = builder.extract_staypoints()
+        return self._staypoints
 
-    def write_to_kml(self, directory, staypoints=None):
+    def write_to_kml(self, directory):
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
 
@@ -68,14 +72,19 @@ class GPSTrajectory(object):
             start=self.earliest_time.strftime("%s"),
             end=self.latest_time.strftime("%s"),
         )
-        kml = StaypointKML(path=os.path.join(directory, filename))
+        path = os.path.join(directory, filename)
+        logger.debug('Saving trajectory to {}'.format(path))
+
+        kml = StaypointKML(path=path)
         kml.add_trajectory(trajectory=self)
-
-        if staypoints is not None:
+        staypoints = self.staypoints
+        if staypoints:
             kml.add_staypoints(staypoints=staypoints)
-
         kml.save()
 
+    def summarize(self):
+        for staypoint in self.staypoints:
+            pass
 
     def __iter__(self):
         for p in self.points:

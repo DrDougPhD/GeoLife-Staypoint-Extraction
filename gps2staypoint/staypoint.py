@@ -1,12 +1,12 @@
 import logging
+
+from gps2staypoint import config
+
 logger = logging.getLogger(__name__)
 
 
-class StayPoint(object):
-    def __init__(self, time_threshold, distance_threshold, initial_point=None):
-        self.time_threshold = time_threshold
-        self.distance_threshold = distance_threshold
-
+class StayPoint(config.StayPointConfiguration):
+    def __init__(self, initial_point=None):
         self.points = []
         if initial_point is not None:
             self.points.append(initial_point)
@@ -18,7 +18,7 @@ class StayPoint(object):
 
         else:
             first_point = self.points[0]
-            if first_point.distance_to(point) > self.distance_threshold:
+            if first_point.distance_to(point) > self.DISTANCE_THRESHOLD:
                 return False
 
             else:
@@ -29,7 +29,7 @@ class StayPoint(object):
         first_point = self.points[0]
         last_point = self.points[-1]
         time_difference = last_point.timestamp - first_point.timestamp
-        if time_difference >= self.time_threshold:
+        if time_difference >= self.TIME_THRESHOLD:
             return True
         else:
             return False
@@ -74,15 +74,12 @@ class StayPoint(object):
 
 
 class StaypointBuilder(object):
-    def __init__(self, trajectory, time_threshold, distance_threshold):
+    def __init__(self, trajectory):
         self.trajectory = trajectory
-        self.time_threshold = time_threshold
-        self.distance_threshold = distance_threshold
 
     def extract_staypoints(self):
         staypoints = []
-        staypoint = StayPoint(time_threshold=self.time_threshold,
-                              distance_threshold=self.distance_threshold)
+        staypoint = StayPoint()
         skipped_staypoints = 0
 
         for point in self.trajectory:
@@ -96,11 +93,7 @@ class StaypointBuilder(object):
                 else:
                     skipped_staypoints += 1
 
-                staypoint = StayPoint(
-                    time_threshold=self.time_threshold,
-                    distance_threshold=self.distance_threshold,
-                    initial_point=point,
-                )
+                staypoint = StayPoint(initial_point=point)
 
         if staypoints:
             logger.debug('{: >4} detected staypoints,'

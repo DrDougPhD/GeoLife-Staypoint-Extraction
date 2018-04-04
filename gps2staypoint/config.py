@@ -10,11 +10,14 @@ DEFAULT_GEOLIFE_DIRECTORY = os.path.join(
     'Data'
 )
 GPS_TRAJECTORY_TIME_INTERVAL_THRESHOLD = datetime.timedelta(minutes=20)
-STAYPOINT_TIME_THRESHOLD = datetime.timedelta(minutes=20)
-STAYPOINT_DISTANCE_THRESHOLD = 200
 
 
-class Colors:
+class StayPointConfiguration(object):
+    TIME_THRESHOLD = datetime.timedelta(minutes=20)
+    DISTANCE_THRESHOLD = 200 # meters
+
+
+class Colors(object):
     distance = 'green'
     time_difference = 'cyan'
 
